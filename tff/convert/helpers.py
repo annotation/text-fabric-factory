@@ -2,7 +2,7 @@ import re
 from textwrap import dedent
 
 from tf.core.helpers import console
-from tf.core.files import fileExists, readJson, readYaml
+from tf.core.files import fileExists, readJson, readYaml, stripExt
 
 
 PRE = "pre"
@@ -715,7 +715,7 @@ def lookupSource(cv, cur, tokenAsSlot, specs):
         cv.feature(targetNode, **source)
 
 
-def getPageInfo(pageInfoDir, zoneBased, folders):
+def getPageInfo(pageInfoDir, zoneBased, manifestLevel):
     if pageInfoDir is None:
         return {}
 
@@ -742,15 +742,37 @@ def getPageInfo(pageInfoDir, zoneBased, folders):
                 )
 
                 for path, ps in pagesProto.items():
-                    folder = path.split("/")[0]
+                    pathComps = path.split("/")
+                    folder = pathComps[0]
+
+                    if manifestLevel == "file":
+                        file = stripExt(pathComps[1])
+
                     mapping = facsMapping.get(path, {})
-                    pages.setdefault(folder, []).extend([mapping.get(p, p) for p in ps])
+                    mappedPs = [mapping.get(p, p) for p in ps]
+                    pagesDest = pages.setdefault(
+                        folder, [] if manifestLevel == "folder" else {}
+                    )
+
+                    if manifestLevel == "folder":
+                        pagesDest.extend(mappedPs)
+                    else:
+                        pagesDest.setdefault(file, []).extend(mappedPs)
             else:
                 console(f"No facs mapping file {facsMappingFile}", error=True)
         else:
             for path, ps in pagesProto.items():
                 (folder, file) = path.split("/")
+                file = stripExt(file)
+                pagesDest = pages.setdefault(
+                    folder, [] if manifestLevel == "folder" else {}
+                )
                 pages.setdefault(folder, []).extend(ps)
+
+                if manifestLevel == "folder":
+                    pagesDest.extend(ps)
+                else:
+                    pagesDest.setdefault(file, []).extend(ps)
     else:
         console("No page-facsimile relating information found", error=True)
 
