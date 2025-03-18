@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.11.1" />
-<title>tff.cheatsheet API documentation</title>
-<meta name="description" content="Interchange with external annotation tools …" />
+<title>tff.convert.app.static API documentation</title>
+<meta name="description" content="" />
 <!-- integrity SRI from https://cdnjs.com/libraries/10up-sanitize.css/11.0.1 -->
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css"
 integrity="sha512-kcbluZFacWN57NgWZ4aH6eUMBEaTyErFhIFD3y5qYZbKuuyImH0K/AKsBbfXlivh2z5C+3IDTIhI11YmKomzmA=="
@@ -25,158 +25,9 @@ crossorigin>
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>tff.cheatsheet</code></h1>
+<h1 class="title">Module <code>tff.convert.app.static</code></h1>
 </header>
 <section id="section-intro">
-<h2 id="interchange-with-external-annotation-tools">Interchange with external annotation tools</h2>
-<pre><code class="language-python">from tff.convert.addnlp import NLPipeline
-</code></pre>
-<dl>
-<dt><pre><code class="language-python">NLPipeline()
-</code></pre></dt>
-<dd>
-<p>generate plain text, feed into NLP, ingest results</p>
-</dd>
-<dd>
-<p><code><a title="tff.convert.addnlp" href="convert/addnlp.html">tff.convert.addnlp</a></code></p>
-</dd>
-</dl>
-<hr>
-<h2 id="xml-tei-import">XML / TEI import</h2>
-<pre><code class="language-python">from tff.convert.xml import XML
-</code></pre>
-<dl>
-<dt><pre><code class="language-python">X = XML(...)
-</code></pre></dt>
-<dd>
-<p>convert XML source to full-fledged TF dataset plus app but no docs;
-put in your own conversion code, if you wish;
-see <a href="https://nbviewer.org/github/ETCBC/nestle1904/blob/master/programs/tfFromLowfat.ipynb">Greek New Testament</a></p>
-</dd>
-<dd>
-<p><code><a title="tff.convert.xml" href="convert/xml.html">tff.convert.xml</a></code></p>
-</dd>
-</dl>
-<pre><code class="language-python">from tff.convert.tei import TEI
-</code></pre>
-<dl>
-<dt><pre><code class="language-python">T = TEI(...)
-</code></pre></dt>
-<dd>
-<p>convert TEI source to full-fledged TF dataset plus app plus docs</p>
-</dd>
-<dd>
-<p><code><a title="tff.convert.tei" href="convert/tei.html">tff.convert.tei</a></code></p>
-</dd>
-</dl>
-<hr>
-<h2 id="watm-export">WATM export</h2>
-<pre><code class="language-python">from tf.app import use
-from tff.convert.watm import WATM
-</code></pre>
-<dl>
-<dt><pre><code class="language-python">A = use(...)
-WA = WATM(A, ns, ...)
-WA.makeText()
-WA.makeAnno()
-WA.writeAll()
-WA.testAll()
-</code></pre></dt>
-<dd>
-<p>convert TF dataset to text tokens and annotations in JSON format,
-for consumption by TextRepo/AnnoRepo of
-<a href="https://di.huc.knaw.nl/text-analysis-en.html">KNAW/HuC Digital Infrastructure</a>.
-See
-<a href="https://github.com/annotation/mondriaan">Mondriaan Proeftuin</a>
-<a href="https://gitlab.huc.knaw.nl/suriano/letters">Suriano Letters</a>
-<a href="https://github.com/translatin-manif">HuygensING/translatin-manif</a></p>
-</dd>
-<dd>
-<p><code><a title="tff.convert.watm" href="convert/watm.html">tff.convert.watm</a></code></p>
-</dd>
-</dl>
-<pre><code class="language-python">from tff.convert.watm import WATMS
-</code></pre>
-<dl>
-<dt><pre><code class="language-python">W = WATM(org, repo, backend, ns, ...)
-W.produce()
-</code></pre></dt>
-<dd>
-<p>convert series of TF datasets to WATM</p>
-</dd>
-<dd>
-<p><code><a title="tff.convert.watm.WATMS" href="convert/watm.html#tff.convert.watm.WATMS">WATMS</a></code></p>
-</dd>
-</dl>
-<hr>
-<h2 id="nlp-import">NLP import</h2>
-<p><strong>in order to use this, install Spacy, see <code><a title="tff.tools.myspacy" href="tools/myspacy.html">tff.tools.myspacy</a></code></strong></p>
-<pre><code class="language-python">
-from tff.convert.addnlp import addTokensAndSentences
-</code></pre>
-<dl>
-<dt><pre><code class="language-python">newVersion = addTokensAndSenteces(A)
-</code></pre></dt>
-<dd>
-<p>add NLP output from Spacy to an existing
-TF dataset. See the docs how this is broken down in separate
-steps.</p>
-</dd>
-<dd>
-<p><code><a title="tff.convert.addnlp" href="convert/addnlp.html">tff.convert.addnlp</a></code></p>
-</dd>
-</dl>
-<hr>
-<h1 id="command-line-tools">Command-line tools</h1>
-<p>(these work on the command-line if TF is installed)</p>
-<dl>
-<dt><pre><code class="language-sh">tff-xmlschema analysis {schema}.xsd
-</code></pre></dt>
-<dd>
-<p>Analyses an XML <em>schema</em> file and extracts meaningful information for processing
-the XML that adheres to that schema.</p>
-</dd>
-<dd>
-<p><code><a title="tff.tools.xmlschema" href="tools/xmlschema.html">tff.tools.xmlschema</a></code></p>
-</dd>
-<dt><pre><code class="language-sh">tff-fromxml
-</code></pre></dt>
-<dd>
-<p>When run in a repo it finds an XML source and converts it to TF.
-The resulting TF data is delivered in the repo.
-There is a hook to put your own conversion code in.</p>
-</dd>
-<dd>
-<p><code><a title="tff.convert.xml" href="convert/xml.html">tff.convert.xml</a></code></p>
-</dd>
-<dt><pre><code class="language-sh">tff-fromtei
-</code></pre></dt>
-<dd>
-<p>When run in a repo it finds a TEI source and converts it to TF.
-The resulting TF data is delivered in the repo.</p>
-</dd>
-<dd>
-<p><code><a title="tff.convert.tei" href="convert/tei.html">tff.convert.tei</a></code></p>
-</dd>
-<dt><pre><code class="language-sh">tff-addnlp
-</code></pre></dt>
-<dd>
-<p>When run in the repo of a TF dataset, it adds NLP output to it
-after running Spacy to get them.</p>
-</dd>
-<dd>
-<p><code><a title="tff.convert.addnlp" href="convert/addnlp.html">tff.convert.addnlp</a></code></p>
-</dd>
-</dl>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/769124c83c21a537c82e8d7718d44636d01eba3d/tff/cheatsheet.py#L1-L3" class="git-link">Browse git</a>
-</summary>
-<pre><code class="python">&#34;&#34;&#34;
-.. include:: docs/main/cheatsheet.md
-&#34;&#34;&#34;</code></pre>
-</details>
 </section>
 <section>
 </section>
@@ -188,10 +39,10 @@ after running Spacy to get them.</p>
 </section>
 </article>
 <nav id="sidebar">
-<p><a href="https://github.com/annotation" title="annotation on GitHub"><img src="../tff/images/tf-small.png" alt="annotation"></a></p>
-<p><a href="../tff/index.html">tff home</a> -
-<a href="../tff/cheatsheet.html">cheat sheet</a> -
-<a href="https://github.com/annotation/text-fabric-factory" title="GitHub repo"><img src="../tff/images/GitHub_Logo.png" alt="GitHub" width="50"></a></p>
+<p><a href="https://github.com/annotation" title="annotation on GitHub"><img src="../../../../tff/images/tf-small.png" alt="annotation"></a></p>
+<p><a href="../../../../tff/index.html">tff home</a> -
+<a href="../../../../tff/cheatsheet.html">cheat sheet</a> -
+<a href="https://github.com/annotation/text-fabric-factory" title="GitHub repo"><img src="../../../../tff/images/GitHub_Logo.png" alt="GitHub" width="50"></a></p>
 </p>
 <form>
 <input id="lunr-search" name="q" placeholder="🔎 Search ..." aria-label="Search"
@@ -227,7 +78,7 @@ const query = new URL(window.location).searchParams.get('q');
 if (query)
 search(query);
 function search(query) {
-const url = '../doc-search.html#' + encodeURIComponent(query);
+const url = '../../../../doc-search.html#' + encodeURIComponent(query);
 new tingle.modal({
 cssClass: ['modal-dialog'],
 onClose: () => {
@@ -241,18 +92,12 @@ setTimeout(() => input.focus(), 100);
 </script>
 <h1>Index</h1>
 <div class="toc">
-<ul>
-<li><a href="#interchange-with-external-annotation-tools">Interchange with external annotation tools</a></li>
-<li><a href="#xml-tei-import">XML / TEI import</a></li>
-<li><a href="#watm-export">WATM export</a></li>
-<li><a href="#nlp-import">NLP import</a></li>
-<li><a href="#command-line-tools">Command-line tools</a></li>
-</ul>
+<ul></ul>
 </div>
 <ul id="index">
 <li><h3>Super-module</h3>
 <ul>
-<li><code><a title="tff" href="index.html">tff</a></code></li>
+<li><code><a title="tff.convert.app" href="../index.html">tff.convert.app</a></code></li>
 </ul>
 </li>
 </ul>
@@ -260,7 +105,7 @@ setTimeout(() => input.focus(), 100);
 </main>
 <footer id="footer">
 <a href="https://pure.knaw.nl/portal/en/persons/dirk-roorda">Dirk Roorda</a>
-<a href="https://huc.knaw.nl"><img alt="HuC" src="../tff/images/huc.png" width="200" alt="Humanities Cluster"></a>
+<a href="https://huc.knaw.nl"><img alt="HuC" src="../../../../tff/images/huc.png" width="200" alt="Humanities Cluster"></a>
 <p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.11.1</a>.</p>
 </footer>
 </body>
