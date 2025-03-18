@@ -37,7 +37,7 @@ currentVersion = None
 newVersion = None
 
 HELP = """
-python tfb.py command
+python tffb.py command
 
 command:
 
