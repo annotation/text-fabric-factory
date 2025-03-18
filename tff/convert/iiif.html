@@ -31,7 +31,7 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/769124c83c21a537c82e8d7718d44636d01eba3d/tff/convert/iiif.py#L1-L451" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/bfa40c6be3ca339a5022dd1f690a8305f2b0ff15/tff/convert/iiif.py#L1-L512" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">from tf.core.files import (
     writeJson,
@@ -39,6 +39,7 @@ crossorigin>
     fileExists,
     initTree,
     dirExists,
+    dirRemove,
     dirCopy,
     dirContents,
     stripExt,
@@ -221,6 +222,7 @@ class IIIF:
         teiVersionRep = f&#34;/{teiVersion}&#34; if teiVersion else teiVersion
 
         F = app.api.F
+        L = app.api.L
 
         repoLocation = app.repoLocation
         outputDir = (
@@ -264,21 +266,38 @@ class IIIF:
             return
 
         self.settings = settings
+        manifestLevel = settings.get(&#34;manifestLevel&#34;, &#34;folder&#34;)
+        console(f&#34;Manifestlevel = {manifestLevel}&#34;)
+        self.manifestLevel = manifestLevel
 
         self.templates = parseIIIF(settings, prod, &#34;templates&#34;, **kwargs)
-        folders = [F.folder.v(f) for f in F.otype.s(&#34;folder&#34;)]
+
+        folders = (
+            [F.folder.v(f) for f in F.otype.s(&#34;folder&#34;)]
+            if manifestLevel == &#34;folder&#34;
+            else [
+                (F.folder.v(fo), [F.file.v(fi) for fi in L.d(fo, otype=&#34;file&#34;)])
+                for fo in F.otype.s(&#34;folder&#34;)
+            ]
+        )
 
         self.getSizes()
         self.getRotations()
-        self.getPageSeq(folders)
+        self.getPageSeq()
         pages = self.pages
         self.folders = folders
 
         self.console(&#34;Collections:&#34;)
 
-        for folder in folders:
-            n = len(pages[&#34;pages&#34;][folder])
-            self.console(f&#34;{folder:&gt;5} with {n:&gt;4} pages&#34;)
+        if manifestLevel == &#34;folder&#34;:
+            for folder in folders:
+                n = len(pages[&#34;pages&#34;][folder])
+                self.console(f&#34;{folder:&gt;5} with {n:&gt;4} pages&#34;)
+        else:
+            for folder, files in folders:
+                n = len(pages[&#34;pages&#34;][folder])
+                m = sum(len(x) for x in pages[&#34;pages&#34;][folder].values())
+                self.console(f&#34;{folder:&gt;10} with {n:&gt;4} files and {m:&gt;4} pages&#34;)
 
     def console(self, msg, **kwargs):
         &#34;&#34;&#34;Print something to the output.
@@ -370,10 +389,11 @@ class IIIF:
             self.console(f&#34;Average dimensions: W = {avW:&gt;4} H = {avH:&gt;4}&#34;)
             self.console(f&#34;Average deviation:  W = {devW:&gt;4} H = {devH:&gt;4}&#34;)
 
-    def getPageSeq(self, folders):
+    def getPageSeq(self):
         if self.error:
             return
 
+        manifestLevel = self.manifestLevel
         doCovers = self.doCovers
         zoneBased = self.settings.get(&#34;zoneBased&#34;, False)
 
@@ -386,24 +406,30 @@ class IIIF:
 
         pageInfoDir = self.pageInfoDir
 
-        pages = getPageInfo(pageInfoDir, zoneBased, folders)
+        pages = getPageInfo(pageInfoDir, zoneBased, manifestLevel)
 
         if doCovers:
             pages[&#34;covers&#34;] = covers
 
         self.pages = pages
 
-    def genPages(self, kind, folder=None):
+    def genPages(self, kind, folder=None, file=None):
         if self.error:
             return
 
+        manifestLevel = self.manifestLevel
         zoneBased = self.settings.get(&#34;zoneBased&#34;, False)
 
         templates = self.templates
         sizeInfo = self.sizeInfo[kind]
         rotateInfo = None if kind == &#34;covers&#34; else self.rotateInfo
-        pages = self.pages[kind]
-        thesePages = pages if folder is None else pages[folder]
+        things = self.pages[kind]
+        theseThings = things if folder is None else things.get(folder, None)
+
+        if manifestLevel == &#34;folder&#34;:
+            thesePages = theseThings or []
+        else:
+            thesePages = theseThings if file is None else theseThings.get(file, [])
 
         if kind == &#34;covers&#34;:
             folder = &#34;covers&#34;
@@ -424,7 +450,14 @@ class IIIF:
 
             for k, v in pageItem.items():
                 v = fillinIIIF(
-                    v, folder=folder, page=p, region=region, width=w, height=h, rot=rot
+                    v,
+                    folder=folder,
+                    file=file,
+                    page=p,
+                    region=region,
+                    width=w,
+                    height=h,
+                    rot=rot,
                 )
                 item[k] = v
 
@@ -438,12 +471,23 @@ class IIIF:
         data = {}
 
         for k, v in pageSequence.items():
-            v = fillinIIIF(v, folder=folder)
+            v = fillinIIIF(v, folder=folder, file=file)
             data[k] = v
 
         data[&#34;items&#34;] = items
 
-        writeJson(data, asFile=f&#34;{manifestDir}/{folder}.json&#34;)
+        nPages = len(items)
+
+        if nPages:
+            writeJson(
+                data,
+                asFile=(
+                    f&#34;{manifestDir}/{folder}.json&#34;
+                    if manifestLevel == &#34;folder&#34;
+                    else f&#34;{manifestDir}/{folder}/{file}.json&#34;
+                ),
+            )
+        return nPages
 
     def manifests(self):
         if self.error:
@@ -454,6 +498,7 @@ class IIIF:
         logoInDir = self.logoInDir
         logoDir = self.logoDir
         doCovers = self.doCovers
+        manifestLevel = self.manifestLevel
 
         prod = self.prod
         settings = self.settings
@@ -475,15 +520,31 @@ class IIIF:
 
             self.genPages(&#34;covers&#34;)
 
-        for folder in folders:
-            self.genPages(&#34;pages&#34;, folder=folder)
+        n = 0
+
+        if manifestLevel == &#34;folder&#34;:
+            for folder in folders:
+                n += self.genPages(&#34;pages&#34;, folder=folder)
+        else:
+            for folder, files in folders:
+                nf = 0
+                folderDir = f&#34;{manifestDir}/{folder}&#34;
+                initTree(folderDir, fresh=True, gentle=False)
+
+                for file in files:
+                    nf += self.genPages(&#34;pages&#34;, folder=folder, file=file)
+
+                if nf == 0:
+                    dirRemove(folderDir)
+                else:
+                    n += nf
 
         if dirExists(logoInDir):
             dirCopy(logoInDir, logoDir)
         else:
             console(f&#34;Directory with logos not found: {logoInDir}&#34;, error=True)
 
-        self.console(f&#34;IIIF manifests generated in {manifestDir}&#34;)</code></pre>
+        self.console(f&#34;IIIF manifests for {n} pages generated in {manifestDir}&#34;)</code></pre>
 </details>
 </section>
 <section>
@@ -570,7 +631,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/769124c83c21a537c82e8d7718d44636d01eba3d/tff/convert/iiif.py#L140-L451" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/bfa40c6be3ca339a5022dd1f690a8305f2b0ff15/tff/convert/iiif.py#L141-L512" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class IIIF:
     def __init__(
@@ -621,6 +682,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         teiVersionRep = f&#34;/{teiVersion}&#34; if teiVersion else teiVersion
 
         F = app.api.F
+        L = app.api.L
 
         repoLocation = app.repoLocation
         outputDir = (
@@ -664,21 +726,38 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
             return
 
         self.settings = settings
+        manifestLevel = settings.get(&#34;manifestLevel&#34;, &#34;folder&#34;)
+        console(f&#34;Manifestlevel = {manifestLevel}&#34;)
+        self.manifestLevel = manifestLevel
 
         self.templates = parseIIIF(settings, prod, &#34;templates&#34;, **kwargs)
-        folders = [F.folder.v(f) for f in F.otype.s(&#34;folder&#34;)]
+
+        folders = (
+            [F.folder.v(f) for f in F.otype.s(&#34;folder&#34;)]
+            if manifestLevel == &#34;folder&#34;
+            else [
+                (F.folder.v(fo), [F.file.v(fi) for fi in L.d(fo, otype=&#34;file&#34;)])
+                for fo in F.otype.s(&#34;folder&#34;)
+            ]
+        )
 
         self.getSizes()
         self.getRotations()
-        self.getPageSeq(folders)
+        self.getPageSeq()
         pages = self.pages
         self.folders = folders
 
         self.console(&#34;Collections:&#34;)
 
-        for folder in folders:
-            n = len(pages[&#34;pages&#34;][folder])
-            self.console(f&#34;{folder:&gt;5} with {n:&gt;4} pages&#34;)
+        if manifestLevel == &#34;folder&#34;:
+            for folder in folders:
+                n = len(pages[&#34;pages&#34;][folder])
+                self.console(f&#34;{folder:&gt;5} with {n:&gt;4} pages&#34;)
+        else:
+            for folder, files in folders:
+                n = len(pages[&#34;pages&#34;][folder])
+                m = sum(len(x) for x in pages[&#34;pages&#34;][folder].values())
+                self.console(f&#34;{folder:&gt;10} with {n:&gt;4} files and {m:&gt;4} pages&#34;)
 
     def console(self, msg, **kwargs):
         &#34;&#34;&#34;Print something to the output.
@@ -770,10 +849,11 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
             self.console(f&#34;Average dimensions: W = {avW:&gt;4} H = {avH:&gt;4}&#34;)
             self.console(f&#34;Average deviation:  W = {devW:&gt;4} H = {devH:&gt;4}&#34;)
 
-    def getPageSeq(self, folders):
+    def getPageSeq(self):
         if self.error:
             return
 
+        manifestLevel = self.manifestLevel
         doCovers = self.doCovers
         zoneBased = self.settings.get(&#34;zoneBased&#34;, False)
 
@@ -786,24 +866,30 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 
         pageInfoDir = self.pageInfoDir
 
-        pages = getPageInfo(pageInfoDir, zoneBased, folders)
+        pages = getPageInfo(pageInfoDir, zoneBased, manifestLevel)
 
         if doCovers:
             pages[&#34;covers&#34;] = covers
 
         self.pages = pages
 
-    def genPages(self, kind, folder=None):
+    def genPages(self, kind, folder=None, file=None):
         if self.error:
             return
 
+        manifestLevel = self.manifestLevel
         zoneBased = self.settings.get(&#34;zoneBased&#34;, False)
 
         templates = self.templates
         sizeInfo = self.sizeInfo[kind]
         rotateInfo = None if kind == &#34;covers&#34; else self.rotateInfo
-        pages = self.pages[kind]
-        thesePages = pages if folder is None else pages[folder]
+        things = self.pages[kind]
+        theseThings = things if folder is None else things.get(folder, None)
+
+        if manifestLevel == &#34;folder&#34;:
+            thesePages = theseThings or []
+        else:
+            thesePages = theseThings if file is None else theseThings.get(file, [])
 
         if kind == &#34;covers&#34;:
             folder = &#34;covers&#34;
@@ -824,7 +910,14 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 
             for k, v in pageItem.items():
                 v = fillinIIIF(
-                    v, folder=folder, page=p, region=region, width=w, height=h, rot=rot
+                    v,
+                    folder=folder,
+                    file=file,
+                    page=p,
+                    region=region,
+                    width=w,
+                    height=h,
+                    rot=rot,
                 )
                 item[k] = v
 
@@ -838,12 +931,23 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         data = {}
 
         for k, v in pageSequence.items():
-            v = fillinIIIF(v, folder=folder)
+            v = fillinIIIF(v, folder=folder, file=file)
             data[k] = v
 
         data[&#34;items&#34;] = items
 
-        writeJson(data, asFile=f&#34;{manifestDir}/{folder}.json&#34;)
+        nPages = len(items)
+
+        if nPages:
+            writeJson(
+                data,
+                asFile=(
+                    f&#34;{manifestDir}/{folder}.json&#34;
+                    if manifestLevel == &#34;folder&#34;
+                    else f&#34;{manifestDir}/{folder}/{file}.json&#34;
+                ),
+            )
+        return nPages
 
     def manifests(self):
         if self.error:
@@ -854,6 +958,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         logoInDir = self.logoInDir
         logoDir = self.logoDir
         doCovers = self.doCovers
+        manifestLevel = self.manifestLevel
 
         prod = self.prod
         settings = self.settings
@@ -875,15 +980,31 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 
             self.genPages(&#34;covers&#34;)
 
-        for folder in folders:
-            self.genPages(&#34;pages&#34;, folder=folder)
+        n = 0
+
+        if manifestLevel == &#34;folder&#34;:
+            for folder in folders:
+                n += self.genPages(&#34;pages&#34;, folder=folder)
+        else:
+            for folder, files in folders:
+                nf = 0
+                folderDir = f&#34;{manifestDir}/{folder}&#34;
+                initTree(folderDir, fresh=True, gentle=False)
+
+                for file in files:
+                    nf += self.genPages(&#34;pages&#34;, folder=folder, file=file)
+
+                if nf == 0:
+                    dirRemove(folderDir)
+                else:
+                    n += nf
 
         if dirExists(logoInDir):
             dirCopy(logoInDir, logoDir)
         else:
             console(f&#34;Directory with logos not found: {logoInDir}&#34;, error=True)
 
-        self.console(f&#34;IIIF manifests generated in {manifestDir}&#34;)</code></pre>
+        self.console(f&#34;IIIF manifests for {n} pages generated in {manifestDir}&#34;)</code></pre>
 </details>
 <h3>Methods</h3>
 <dl>
@@ -896,13 +1017,13 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <p>When the silent member of the object is True, the message will be suppressed.</p></div>
 </dd>
 <dt id="tff.convert.iiif.IIIF.genPages"><code class="name flex">
-<span>def <span class="ident">genPages</span></span>(<span>self, kind, folder=None)</span>
+<span>def <span class="ident">genPages</span></span>(<span>self, kind, folder=None, file=None)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
 <dt id="tff.convert.iiif.IIIF.getPageSeq"><code class="name flex">
-<span>def <span class="ident">getPageSeq</span></span>(<span>self, folders)</span>
+<span>def <span class="ident">getPageSeq</span></span>(<span>self)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>

@@ -31,13 +31,13 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/769124c83c21a537c82e8d7718d44636d01eba3d/tff/convert/helpers.py#L1-L763" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/bfa40c6be3ca339a5022dd1f690a8305f2b0ff15/tff/convert/helpers.py#L1-L785" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">import re
 from textwrap import dedent
 
 from tf.core.helpers import console
-from tf.core.files import fileExists, readJson, readYaml
+from tf.core.files import fileExists, readJson, readYaml, stripExt
 
 
 PRE = &#34;pre&#34;
@@ -750,7 +750,7 @@ def lookupSource(cv, cur, tokenAsSlot, specs):
         cv.feature(targetNode, **source)
 
 
-def getPageInfo(pageInfoDir, zoneBased, folders):
+def getPageInfo(pageInfoDir, zoneBased, manifestLevel):
     if pageInfoDir is None:
         return {}
 
@@ -777,15 +777,37 @@ def getPageInfo(pageInfoDir, zoneBased, folders):
                 )
 
                 for path, ps in pagesProto.items():
-                    folder = path.split(&#34;/&#34;)[0]
+                    pathComps = path.split(&#34;/&#34;)
+                    folder = pathComps[0]
+
+                    if manifestLevel == &#34;file&#34;:
+                        file = stripExt(pathComps[1])
+
                     mapping = facsMapping.get(path, {})
-                    pages.setdefault(folder, []).extend([mapping.get(p, p) for p in ps])
+                    mappedPs = [mapping.get(p, p) for p in ps]
+                    pagesDest = pages.setdefault(
+                        folder, [] if manifestLevel == &#34;folder&#34; else {}
+                    )
+
+                    if manifestLevel == &#34;folder&#34;:
+                        pagesDest.extend(mappedPs)
+                    else:
+                        pagesDest.setdefault(file, []).extend(mappedPs)
             else:
                 console(f&#34;No facs mapping file {facsMappingFile}&#34;, error=True)
         else:
             for path, ps in pagesProto.items():
                 (folder, file) = path.split(&#34;/&#34;)
+                file = stripExt(file)
+                pagesDest = pages.setdefault(
+                    folder, [] if manifestLevel == &#34;folder&#34; else {}
+                )
                 pages.setdefault(folder, []).extend(ps)
+
+                if manifestLevel == &#34;folder&#34;:
+                    pagesDest.extend(ps)
+                else:
+                    pagesDest.setdefault(file, []).extend(ps)
     else:
         console(&#34;No page-facsimile relating information found&#34;, error=True)
 
@@ -929,7 +951,7 @@ or by elements within a single TEI source file.</p>
 <div class="desc"></div>
 </dd>
 <dt id="tff.convert.helpers.getPageInfo"><code class="name flex">
-<span>def <span class="ident">getPageInfo</span></span>(<span>pageInfoDir, zoneBased, folders)</span>
+<span>def <span class="ident">getPageInfo</span></span>(<span>pageInfoDir, zoneBased, manifestLevel)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
