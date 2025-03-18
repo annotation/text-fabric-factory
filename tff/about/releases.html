@@ -4,8 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.11.1" />
-<title>tff API documentation</title>
-<meta name="description" content="![logo](images/tf.png) …" />
+<title>tff.about.releases API documentation</title>
+<meta name="description" content="**The TEI converter, the WATM exporter and the IIIF manifest generator are
+still in active development.
+If you need the latest version, clone the …" />
 <!-- integrity SRI from https://cdnjs.com/libraries/10up-sanitize.css/11.0.1 -->
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css"
 integrity="sha512-kcbluZFacWN57NgWZ4aH6eUMBEaTyErFhIFD3y5qYZbKuuyImH0K/AKsBbfXlivh2z5C+3IDTIhI11YmKomzmA=="
@@ -25,61 +27,30 @@ crossorigin>
 <main>
 <article id="content">
 <header>
-<h1 class="title">Package <code>tff</code></h1>
+<h1 class="title">Module <code>tff.about.releases</code></h1>
 </header>
 <section id="section-intro">
-<p><img alt="logo" src="images/tf.png"></p>
-<h1 id="text-fabric-factory">Text-Fabric-Factory</h1>
-<p>This package contains modules to convert various XML sources to TF:
-XML in general, TEI, PageXML.</p>
-<p>It also contains modules to work with XML schemas, to validate XML against schemas,
-to determine which elements are mixed and which are pure, etc.
-For these operations you need to have Java installed.</p>
-<p>The development of the programs here is driven by the need of
-<a href="https://di.huc.knaw.nl/text-analysis-en.html">KNAW/HuC</a>
-to publish its textual corpora in the way of texts plus web annotations.</p>
-<h2 id="straight-to">Straight to &hellip;</h2>
-<ul>
-<li>Release notes (<code>tf.about.releases</code>)</li>
-<li>Install (<code>tf.about.install</code>)</li>
-</ul>
-<h2 id="author">Author</h2>
-<p><strong>Author</strong>:
-<a href="https://pure.knaw.nl/portal/en/persons/dirk-roorda">Dirk Roorda</a></p>
+<p><strong>The TEI converter, the WATM exporter and the IIIF manifest generator are
+still in active development.
+If you need the latest version, clone the Text-Fabric-Factory repo
+and in its top-level directory run the command:</strong></p>
+<pre><code class="language-sh">pip install -e .
+</code></pre>
+<h2 id="1">1</h2>
+<h2 id="10">1.0</h2>
+<h3 id="100">1.0.0</h3>
+<p>First release.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/336becebb9a7ace335ed66e7836962a247138c24/tff/__init__.py#L1-L3" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/336becebb9a7ace335ed66e7836962a247138c24/tff/about/releases.py#L1-L3" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">&#34;&#34;&#34;
-.. include:: docs/main/top.md
+.. include:: ../docs/about/releases.md
 &#34;&#34;&#34;</code></pre>
 </details>
 </section>
 <section>
-<h2 class="section-title" id="header-submodules">Sub-modules</h2>
-<dl>
-<dt><code class="name"><a title="tff.about" href="about/index.html">tff.about</a></code></dt>
-<dd>
-<div class="desc"><p>Documents …</p></div>
-</dd>
-<dt><code class="name"><a title="tff.cheatsheet" href="cheatsheet.html">tff.cheatsheet</a></code></dt>
-<dd>
-<div class="desc"><p>Interchange with external annotation tools …</p></div>
-</dd>
-<dt><code class="name"><a title="tff.convert" href="convert/index.html">tff.convert</a></code></dt>
-<dd>
-<div class="desc"></div>
-</dd>
-<dt><code class="name"><a title="tff.parameters" href="parameters.html">tff.parameters</a></code></dt>
-<dd>
-<div class="desc"><p>Parameters …</p></div>
-</dd>
-<dt><code class="name"><a title="tff.tools" href="tools/index.html">tff.tools</a></code></dt>
-<dd>
-<div class="desc"></div>
-</dd>
-</dl>
 </section>
 <section>
 </section>
@@ -89,10 +60,10 @@ to publish its textual corpora in the way of texts plus web annotations.</p>
 </section>
 </article>
 <nav id="sidebar">
-<p><a href="https://github.com/annotation" title="annotation on GitHub"><img src="../tff/images/tf-small.png" alt="annotation"></a></p>
-<p><a href="../tff/index.html">tff home</a> -
-<a href="../tff/cheatsheet.html">cheat sheet</a> -
-<a href="https://github.com/annotation/text-fabric-factory" title="GitHub repo"><img src="../tff/images/GitHub_Logo.png" alt="GitHub" width="50"></a></p>
+<p><a href="https://github.com/annotation" title="annotation on GitHub"><img src="../../tff/images/tf-small.png" alt="annotation"></a></p>
+<p><a href="../../tff/index.html">tff home</a> -
+<a href="../../tff/cheatsheet.html">cheat sheet</a> -
+<a href="https://github.com/annotation/text-fabric-factory" title="GitHub repo"><img src="../../tff/images/GitHub_Logo.png" alt="GitHub" width="50"></a></p>
 </p>
 <form>
 <input id="lunr-search" name="q" placeholder="🔎 Search ..." aria-label="Search"
@@ -128,7 +99,7 @@ const query = new URL(window.location).searchParams.get('q');
 if (query)
 search(query);
 function search(query) {
-const url = '../doc-search.html#' + encodeURIComponent(query);
+const url = '../../doc-search.html#' + encodeURIComponent(query);
 new tingle.modal({
 cssClass: ['modal-dialog'],
 onClose: () => {
@@ -143,21 +114,17 @@ setTimeout(() => input.focus(), 100);
 <h1>Index</h1>
 <div class="toc">
 <ul>
-<li><a href="#text-fabric-factory">Text-Fabric-Factory</a><ul>
-<li><a href="#straight-to">Straight to &hellip;</a></li>
-<li><a href="#author">Author</a></li>
+<li><a href="#1">1</a></li>
+<li><a href="#10">1.0</a><ul>
+<li><a href="#100">1.0.0</a></li>
 </ul>
 </li>
 </ul>
 </div>
 <ul id="index">
-<li><h3><a href="#header-submodules">Sub-modules</a></h3>
+<li><h3>Super-module</h3>
 <ul>
-<li><code><a title="tff.about" href="about/index.html">tff.about</a></code></li>
-<li><code><a title="tff.cheatsheet" href="cheatsheet.html">tff.cheatsheet</a></code></li>
-<li><code><a title="tff.convert" href="convert/index.html">tff.convert</a></code></li>
-<li><code><a title="tff.parameters" href="parameters.html">tff.parameters</a></code></li>
-<li><code><a title="tff.tools" href="tools/index.html">tff.tools</a></code></li>
+<li><code><a title="tff.about" href="index.html">tff.about</a></code></li>
 </ul>
 </li>
 </ul>
@@ -165,7 +132,7 @@ setTimeout(() => input.focus(), 100);
 </main>
 <footer id="footer">
 <a href="https://pure.knaw.nl/portal/en/persons/dirk-roorda">Dirk Roorda</a>
-<a href="https://huc.knaw.nl"><img alt="HuC" src="../tff/images/huc.png" width="200" alt="Humanities Cluster"></a>
+<a href="https://huc.knaw.nl"><img alt="HuC" src="../../tff/images/huc.png" width="200" alt="Humanities Cluster"></a>
 <p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.11.1</a>.</p>
 </footer>
 </body>
