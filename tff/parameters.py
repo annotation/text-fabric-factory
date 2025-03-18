@@ -17,3 +17,5 @@ NAME = "Text-Fabric-Factory"
 """
 
 BANNER = f"This is {NAME} {VERSION}"
+
+URL_TF_DOCS = "https://annotation.github.io/text-fabric-factory/tff"

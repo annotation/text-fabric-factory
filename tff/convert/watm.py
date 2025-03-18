@@ -489,9 +489,10 @@ from tf.core.files import (
     APP_CONFIG,
 )
 from tf.core.timestamp import DEEP
-from tf.parameters import OTYPE, OSLOTS, URL_TF_DOCS
+from tf.parameters import OTYPE, OSLOTS
 from tf.app import use
 
+from ..parameters import URL_TF_DOCS
 from .iiif import parseIIIF
 from .helpers import getPageInfo
 

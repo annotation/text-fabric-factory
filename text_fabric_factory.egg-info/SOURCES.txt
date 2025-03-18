@@ -10,6 +10,8 @@ text_fabric_factory.egg-info/entry_points.txt
 text_fabric_factory.egg-info/not-zip-safe
 text_fabric_factory.egg-info/requires.txt
 text_fabric_factory.egg-info/top_level.txt
+tff/__init__.py
+tff/cheatsheet.py
 tff/parameters.py
 tff/convert/addnlp.py
 tff/convert/helpers.py
