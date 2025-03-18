@@ -1,0 +1,5 @@
+[console_scripts]
+tff-addnlp = tff.convert.addnlp:main
+tff-fromtei = tff.convert.tei:main
+tff-fromxml = tff.convert.xml:main
+tff-xmlschema = tff.tools.xmlschema:main

@@ -1,0 +1,32 @@
+Metadata-Version: 2.2
+Name: text-fabric-factory
+Version: 1.0.0
+Summary: Factory for Text-Fabric datasets
+Home-page: https://github.com/annotation/text-fabric-factory
+Author: Dirk Roorda
+Author-email: dirk.roorda@di.huc.knaw.nl
+Keywords: text,linguistics,database,graph
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Other Environment
+Classifier: Framework :: Jupyter
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Education
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Natural Language :: English
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: Microsoft :: Windows :: Windows 10
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Programming Language :: JavaScript
+Classifier: Topic :: Scientific/Engineering :: Information Analysis
+Classifier: Topic :: Text Processing :: Filters
+Classifier: Topic :: Text Processing :: Linguistic
+Classifier: Topic :: Text Processing :: Markup
+Requires-Python: >=3.9.0
+License-File: LICENSE
+Requires-Dist: wheel
+Requires-Dist: text-fabric
+
+file README.md

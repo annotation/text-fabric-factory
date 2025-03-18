@@ -1,0 +1,6 @@
+recursive-include tf/convert/app *
+recursive-include tf/tools/tei *
+recursive-include tf/tools/trang *
+recursive-include tf/tools/jing *
+recursive-exclude __pycache__ *
+prune */docs
