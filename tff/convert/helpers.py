@@ -1,8 +1,9 @@
 import re
 from textwrap import dedent
 
+from tf.core.generic import AttrDict
 from tf.core.helpers import console
-from tf.core.files import fileExists, readJson, readYaml, stripExt
+from tf.core.files import fileExists, readJson, readYaml, stripExt, fileOpen, dirExists
 
 
 PRE = "pre"
@@ -783,3 +784,84 @@ def getPageInfo(pageInfoDir, zoneBased, manifestLevel):
         result = dict(pages=pages)
 
     return result
+
+
+def getImageSizes(scanRefDir, doCovers, silent):
+    sizeInfo = {}
+
+    for kind in ("covers", "pages") if doCovers else ("pages",):
+        sizeFile = f"{scanRefDir}/sizes_{kind}.tsv"
+
+        thisSizeInfo = {}
+        sizeInfo[kind] = thisSizeInfo
+
+        maxW, maxH = 0, 0
+
+        n = 0
+
+        totW, totH = 0, 0
+
+        ws, hs = [], []
+
+        if not fileExists(sizeFile):
+            console(f"Size file not found: {sizeFile}", error=True)
+            return
+
+        with fileOpen(sizeFile) as rh:
+            next(rh)
+            for line in rh:
+                fields = line.rstrip("\n").split("\t")
+                p = fields[0]
+                (w, h) = (int(x) for x in fields[1:3])
+                thisSizeInfo[p] = (w, h)
+                ws.append(w)
+                hs.append(h)
+                n += 1
+                totW += w
+                totH += h
+
+                if w > maxW:
+                    maxW = w
+                if h > maxH:
+                    maxH = h
+
+        avW = int(round(totW / n))
+        avH = int(round(totH / n))
+
+        devW = int(round(sum(abs(w - avW) for w in ws) / n))
+        devH = int(round(sum(abs(h - avH) for h in hs) / n))
+
+        if not silent:
+            console(f"Maximum dimensions: W = {maxW:>4} H = {maxH:>4}")
+            console(f"Average dimensions: W = {avW:>4} H = {avH:>4}")
+            console(f"Average deviation:  W = {devW:>4} H = {devH:>4}")
+
+    return sizeInfo
+
+
+def getImageLocations(app, prod, silent):
+    repoLocation = app.repoLocation
+    scanDir = f"{repoLocation}/scans"
+    thumbDir = f"{repoLocation}/{app.context.provenanceSpec['graphicsRelative']}"
+    scanRefDir = scanDir if prod == "prod" else thumbDir
+    coversDir = f"{scanRefDir}/covers"
+
+    if dirExists(coversDir):
+        if not silent:
+            console(f"Found covers in directory: {coversDir}")
+
+        doCovers = True
+    else:
+        if not silent:
+            console(f"No cover directory: {coversDir}")
+
+        doCovers = False
+
+    return AttrDict(
+        repoLocation=repoLocation,
+        scanDir=scanDir,
+        thumbDir=thumbDir,
+        scanRefDir=scanRefDir,
+        coversDir=coversDir,
+        doCovers=doCovers,
+    )

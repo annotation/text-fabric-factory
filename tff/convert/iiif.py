@@ -11,7 +11,7 @@ from tf.core.files import (
 )
 from tf.core.generic import AttrDict
 from tf.core.helpers import console, readCfg
-from .helpers import getPageInfo
+from .helpers import getPageInfo, getImageLocations, getImageSizes
 
 DS_STORE = ".DS_Store"
 
@@ -189,7 +189,16 @@ class IIIF:
         F = app.api.F
         L = app.api.L
 
-        repoLocation = app.repoLocation
+        locations = getImageLocations(app, prod, silent)
+        repoLocation = locations.repoLocation
+        self.scanDir = locations.scanDir
+        self.thumbDir = locations.thumbDir
+        scanRefDir = locations.scanRefDir
+        self.scanRefDir = scanRefDir
+        self.coversDir = locations.coversDir
+        doCovers = locations.doCovers
+        self.doCovers = doCovers
+
         outputDir = (
             f"{repoLocation}/static{teiVersionRep}/{prod}"
             if outputDir is None
@@ -197,23 +206,6 @@ class IIIF:
         )
         self.outputDir = outputDir
         self.manifestDir = f"{outputDir}/manifests"
-        thumbDir = f"{repoLocation}/{app.context.provenanceSpec['graphicsRelative']}"
-        self.thumbDir = thumbDir
-        scanDir = f"{repoLocation}/scans"
-        self.scanDir = scanDir
-        scanRefDir = scanDir if prod == "prod" else thumbDir
-        self.scanRefDir = scanRefDir
-        coversDir = f"{scanRefDir}/covers"
-        self.coversDir = coversDir
-
-        if dirExists(coversDir):
-            self.console(f"Found covers in directory: {coversDir}")
-            doCovers = True
-        else:
-            self.console(f"No cover directory: {coversDir}")
-            doCovers = False
-
-        self.doCovers = doCovers
 
         self.pagesDir = f"{scanRefDir}/pages"
         self.logoInDir = f"{scanRefDir}/logo"
@@ -305,54 +297,9 @@ class IIIF:
 
         scanRefDir = self.scanRefDir
         doCovers = self.doCovers
+        silent = self.silent
 
-        self.sizeInfo = {}
-
-        for kind in ("covers", "pages") if doCovers else ("pages",):
-            sizeFile = f"{scanRefDir}/sizes_{kind}.tsv"
-
-            sizeInfo = {}
-            self.sizeInfo[kind] = sizeInfo
-
-            maxW, maxH = 0, 0
-
-            n = 0
-
-            totW, totH = 0, 0
-
-            ws, hs = [], []
-
-            if not fileExists(sizeFile):
-                console(f"Size file not found: {sizeFile}", error=True)
-                return
-
-            with fileOpen(sizeFile) as rh:
-                next(rh)
-                for line in rh:
-                    fields = line.rstrip("\n").split("\t")
-                    p = fields[0]
-                    (w, h) = (int(x) for x in fields[1:3])
-                    sizeInfo[p] = (w, h)
-                    ws.append(w)
-                    hs.append(h)
-                    n += 1
-                    totW += w
-                    totH += h
-
-                    if w > maxW:
-                        maxW = w
-                    if h > maxH:
-                        maxH = h
-
-            avW = int(round(totW / n))
-            avH = int(round(totH / n))
-
-            devW = int(round(sum(abs(w - avW) for w in ws) / n))
-            devH = int(round(sum(abs(h - avH) for h in hs) / n))
-
-            self.console(f"Maximum dimensions: W = {maxW:>4} H = {maxH:>4}")
-            self.console(f"Average dimensions: W = {avW:>4} H = {avH:>4}")
-            self.console(f"Average deviation:  W = {devW:>4} H = {devH:>4}")
+        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
 
     def getPageSeq(self):
         if self.error:
@@ -401,6 +348,8 @@ class IIIF:
 
         pageItem = templates.coverItem if kind == "covers" else templates.pageItem
 
+        itemsSeen = set()
+
         items = []
 
         for p in thesePages:
@@ -412,6 +361,13 @@ class IIIF:
             item = {}
             w, h = sizeInfo.get(p, (0, 0))
             rot = 0 if rotateInfo is None else rotateInfo.get(p, 0)
+
+            key = (p, region, w, h, rot)
+
+            if key in itemsSeen:
+                continue
+
+            itemsSeen.add(key)
 
             for k, v in pageItem.items():
                 v = fillinIIIF(

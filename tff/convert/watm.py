@@ -493,7 +493,7 @@ from tf.parameters import OTYPE, OSLOTS
 from tf.app import use
 
 from ..parameters import URL_TF_DOCS
-from .iiif import parseIIIF
+from .iiif import parseIIIF, getImageSizes, getImageLocations
 from .helpers import getPageInfo
 
 AFTER = "after"
@@ -625,7 +625,11 @@ def getResultDir(baseDir, headPart, version, prod, silent, withSuffix=True):
     -------
     The path to the versioned dir where the WATM ends up.
     """
-    prodRep = "production" if prod == "prod" else "preview" if prod == "preview" else "development"
+    prodRep = (
+        "production"
+        if prod == "prod"
+        else "preview" if prod == "preview" else "development"
+    )
     prodFix = prod if prod in {"prod", "dev", "preview"} else "dev"
     resultDirBase = f"{baseDir}{headPart}/{TT_NAME}"
     initTree(resultDirBase, fresh=False)
@@ -712,13 +716,32 @@ def operationalize(data):
     *   `«parameter»` refers to values defined in the `switches` and `constants`
         top-level sections. They may contain placeholders for variables, i.e. things
         that will be filled in from the data, not from config settings.
-    *   `{variable}`.  Values obtained from the data.]
+    *   `{variable}`.  Values obtained from the data.
         Variables are looked up when going through the (Text-Fabric) data, node by node.
+    *   A function call. The list of supported functions is:
+
+        -   `px`: compute absolute pixel values out of percentage values.
+            It takes 2 arguments: file name and region specifier.
+            The region specifier has the form `pct:x,y,w,h`. If not
+            the result is equal to `full`.
+            The file name is the file name of the image, by which the absolute size can
+            be retrieved.
+            The result has the form x,y,w,h where these are now pixel values.
+
+        The syntax of a function call is:
+
+        ```
+        fname:|param1|param2| ...
+        ```
+
+        The last param does not need to be terminated by a `|`
 
         For each node, we know what the relevant page scan is.
 
         There is a limited supply of variables:
 
+        *   `folder`: the name of the folder the page is in;
+        *   `file`: the name of the file the page is in;
         *   `region`: the region of interest on a scan, given as a IIIF region value:
             `full` or *x,y,w,h* or `pct:`*x,y,w,h*.
         *   `rot`: the rotation to be applied when showing a scan.
@@ -740,7 +763,7 @@ def operationalize(data):
     lookup the first parent of that node type. The second part is the feature name,
     and we take the value of that feature from that parent.
 
-    Only for the variable `node` you have extra possibilities:
+    For the variable `node` you have extra possibilities:
 
     *   `=+1`: take the current node and add 1.
     *   `=-1`: take the current node and subtract 1
@@ -753,6 +776,17 @@ def operationalize(data):
         The iiif.yml settings, and then the `scans` part.
     """
     scanInfo = {}
+    funcRe = re.compile(
+        r"""
+        ^
+        ([a-zA-Z][a-zA-Z0-9_]*)
+        :\|
+        (.*)
+        $
+        """,
+        re.X | re.S,
+    )
+    warnings = {}
 
     for extraFeat, featInfo in data.items():
         for nodeType, info in featInfo.items():
@@ -789,9 +823,88 @@ def operationalize(data):
 
                 newVars[name] = (parent, child, feat, shift)
 
+            match = funcRe.match(value)
+
+            if match:
+                good = True
+
+                funcName, args = match.group(1, 2)
+
+                if funcName != "px":
+                    warnings.setdefault("unknown function name", []).append(
+                        f"{extraFeat}.{nodeType}: {value}"
+                    )
+                    good = False
+
+                args = args.split("|")
+
+                if len(args) != 2:
+                    warnings.setdefault("#args = {nArgs} != 2", []).append(value)
+
+                if good:
+                    value = (funcName, *args)
+
             scanInfo.setdefault(nodeType, []).append((extraFeat, value, newVars))
 
-    return scanInfo
+    for msg, cases in warnings.items():
+        nCases = len(cases)
+        console(f"CONFIG: {msg} ({nCases}x)", error=True)
+
+        for case in cases:
+            console(f"\t{case}", error=True)
+
+    return (len(warnings) == 0, scanInfo)
+
+
+def funcPx(F, L, sizeInfo, feat, otype, node, facsFile, region, warnings):
+
+    file = F.file.v(L.u(node, otype="file")[0])
+    folder = F.folder.v(L.u(node, otype="folder")[0])
+    msg = f"{folder}/{file}: {feat}.{otype}: '{facsFile}' | '{region}'"
+
+    absSize = sizeInfo.get(facsFile, None)
+
+    if absSize is None:
+        if not facsFile or facsFile == "unknown":
+            warnings.setdefault("missing page image", []).append(msg)
+        else:
+            warnings.setdefault("missing absolute size", []).append(msg)
+
+        return "full"
+
+    if len(absSize) != 2:
+        warnings.setdefault("#abs dims != 2", []).append(msg)
+        return "full"
+
+    absW, absH = absSize
+
+    if not region.startswith("pct:"):
+        warnings.setdefault("not pct dims", []).append(msg)
+        return "full"
+
+    pctDims = region[4:].split(",")
+
+    if len(pctDims) != 4:
+        warnings.setdefault("#pct dims != 4", []).append(msg)
+        return "full"
+
+    pctDimsInt = []
+
+    for x in pctDims:
+        if not x.isdecimal():
+            warnings.setdefault("pct dim not int", []).append(msg)
+            return "full"
+
+        pctDimsInt.append(int(x))
+
+    (pctX, pctY, pctW, pctH) = pctDimsInt
+
+    pxX = int(round(pctX * absW / 100))
+    pxY = int(round(pctY * absH / 100))
+    pxW = int(round(pctW * absW / 100))
+    pxH = int(round(pctH * absH / 100))
+
+    return f"{pxX},{pxY},{pxW},{pxH}"
 
 
 class WATM:
@@ -892,12 +1005,15 @@ class WATM:
         if not ok:
             self.error = True
 
+        self.error = False
+
         zoneBased = settings.get("zoneBased", False)
         self.zoneBased = zoneBased
         iiifSettings = parseIIIF(settings, prod, "scans", **kwargs) if settings else {}
-        self.scanInfo = operationalize(iiifSettings)
+        (good, self.scanInfo) = operationalize(iiifSettings)
 
-        self.error = False
+        if not good:
+            self.error = True
 
         textRepoLevel = cfg.textRepoLevel or 1
 
@@ -1030,6 +1146,12 @@ class WATM:
             skipMeta = False
 
         self.skipMeta = skipMeta
+
+        imageLocations = getImageLocations(app, prod, silent)
+        scanRefDir = imageLocations.scanRefDir
+        doCovers = imageLocations.doCovers
+
+        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
 
     def console(self, msg, **kwargs):
         """Print something to the output.
@@ -1168,6 +1290,8 @@ class WATM:
         excludeElements = self.excludeElements
         excludeFeatures = self.excludeFeatures
         scanInfo = self.scanInfo
+        sizeInfo = self.sizeInfo.get("pages", {})
+        silent = self.silent
 
         waFromTF = self.waFromTF
 
@@ -1183,6 +1307,8 @@ class WATM:
         invertedTargets = []
         farTargets = []
         discontinuousNodes = collections.defaultdict(list)
+
+        warnings = {}
 
         def mkSingleTarget(n):
             ts = waFromTF[n]
@@ -1258,16 +1384,42 @@ class WATM:
                                     valuesOK = False
                                     break
 
-                            values[var] = refN if feat == "=" else Fs(feat).v(refN)
+                            thisValue = refN if feat == "=" else Fs(feat).v(refN)
+
+                            values[var] = thisValue
 
                         if not valuesOK:
                             continue
 
-                        val = value.format(**values)
+                        val = None
+
+                        if type(value) is tuple:
+                            if value[0] == "px":
+                                val = funcPx(
+                                    F,
+                                    L,
+                                    sizeInfo,
+                                    extraFeat,
+                                    otype,
+                                    n,
+                                    *[v.format(**values) for v in value[1:]],
+                                    warnings,
+                                )
+                        else:
+                            val = value.format(**values)
 
                         self.mkAnno(
                             KIND_ATTR, NS_TV, f"{extraFeat}={val}", mkSingleTarget(n)
                         )
+
+        for msg, cases in warnings.items():
+            nCases = len(cases)
+            console(f"RUNTIME: {msg} ({nCases}x)", error=True)
+
+            for case in (cases[0:5] if silent else cases):
+                console(f"\t{case}", error=True)
+
+        warnings = None
 
         for feat in nodeFeatures:
             if feat in excludeFeatures:
@@ -1532,7 +1684,7 @@ class WATM:
         sep = "" if nTexts == 1 else "s"
 
         self.console("")
-        self.console(f"Text files all: {total:>8} segments to {nTexts} file{sep}")
+        console(f"Text files all: {total:>8} segments to {nTexts} file{sep}")
 
         # annotation files
 
