@@ -352,7 +352,11 @@ class IIIF:
 
         items = []
 
+        nPages = 0
+
         for p in thesePages:
+            nPages += 1
+
             if zoneBased:
                 (p, region) = p
             else:
@@ -362,7 +366,7 @@ class IIIF:
             w, h = sizeInfo.get(p, (0, 0))
             rot = 0 if rotateInfo is None else rotateInfo.get(p, 0)
 
-            key = (p, region, w, h, rot)
+            key = (p, w, h, rot)
 
             if key in itemsSeen:
                 continue
@@ -397,9 +401,9 @@ class IIIF:
 
         data["items"] = items
 
-        nPages = len(items)
+        nItems = len(items)
 
-        if nPages:
+        if nItems:
             writeJson(
                 data,
                 asFile=(
@@ -408,7 +412,7 @@ class IIIF:
                     else f"{manifestDir}/{folder}/{file}.json"
                 ),
             )
-        return nPages
+        return (nPages, nItems)
 
     def manifests(self):
         if self.error:
@@ -441,28 +445,43 @@ class IIIF:
 
             self.genPages("covers")
 
-        n = 0
+        p = 0
+        i = 0
+        m = 0
 
         if manifestLevel == "folder":
             for folder in folders:
-                n += self.genPages("pages", folder=folder)
+                (thisP, thisI) = self.genPages("pages", folder=folder)
+                p += thisP
+                i += thisI
+
+                if thisI:
+                    m += 1
         else:
             for folder, files in folders:
-                nf = 0
                 folderDir = f"{manifestDir}/{folder}"
                 initTree(folderDir, fresh=True, gentle=False)
 
-                for file in files:
-                    nf += self.genPages("pages", folder=folder, file=file)
+                folderI = 0
 
-                if nf == 0:
+                for file in files:
+                    (thisP, thisI) = self.genPages("pages", folder=folder, file=file)
+                    p += thisP
+                    i += thisI
+
+                    if thisI:
+                        m += 1
+
+                    folderI += thisI
+
+                if folderI == 0:
                     dirRemove(folderDir)
-                else:
-                    n += nf
 
         if dirExists(logoInDir):
             dirCopy(logoInDir, logoDir)
         else:
             console(f"Directory with logos not found: {logoInDir}", error=True)
 
-        self.console(f"IIIF manifests for {n} pages generated in {manifestDir}")
+        self.console(
+            f"{m} IIIF manifests with {i} items for {p} pages generated in {manifestDir}"
+        )
