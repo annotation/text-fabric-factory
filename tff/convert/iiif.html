@@ -31,7 +31,7 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/bfa40c6be3ca339a5022dd1f690a8305f2b0ff15/tff/convert/iiif.py#L1-L512" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/00b1804a2a0eabefbe45442674c2cdeab9cb62dd/tff/convert/iiif.py#L1-L487" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">from tf.core.files import (
     writeJson,
@@ -46,7 +46,7 @@ crossorigin>
 )
 from tf.core.generic import AttrDict
 from tf.core.helpers import console, readCfg
-from .helpers import getPageInfo
+from .helpers import getPageInfo, getImageLocations, getImageSizes
 
 DS_STORE = &#34;.DS_Store&#34;
 
@@ -224,7 +224,16 @@ class IIIF:
         F = app.api.F
         L = app.api.L
 
-        repoLocation = app.repoLocation
+        locations = getImageLocations(app, prod, silent)
+        repoLocation = locations.repoLocation
+        self.scanDir = locations.scanDir
+        self.thumbDir = locations.thumbDir
+        scanRefDir = locations.scanRefDir
+        self.scanRefDir = scanRefDir
+        self.coversDir = locations.coversDir
+        doCovers = locations.doCovers
+        self.doCovers = doCovers
+
         outputDir = (
             f&#34;{repoLocation}/static{teiVersionRep}/{prod}&#34;
             if outputDir is None
@@ -232,23 +241,6 @@ class IIIF:
         )
         self.outputDir = outputDir
         self.manifestDir = f&#34;{outputDir}/manifests&#34;
-        thumbDir = f&#34;{repoLocation}/{app.context.provenanceSpec[&#39;graphicsRelative&#39;]}&#34;
-        self.thumbDir = thumbDir
-        scanDir = f&#34;{repoLocation}/scans&#34;
-        self.scanDir = scanDir
-        scanRefDir = scanDir if prod == &#34;prod&#34; else thumbDir
-        self.scanRefDir = scanRefDir
-        coversDir = f&#34;{scanRefDir}/covers&#34;
-        self.coversDir = coversDir
-
-        if dirExists(coversDir):
-            self.console(f&#34;Found covers in directory: {coversDir}&#34;)
-            doCovers = True
-        else:
-            self.console(f&#34;No cover directory: {coversDir}&#34;)
-            doCovers = False
-
-        self.doCovers = doCovers
 
         self.pagesDir = f&#34;{scanRefDir}/pages&#34;
         self.logoInDir = f&#34;{scanRefDir}/logo&#34;
@@ -340,54 +332,9 @@ class IIIF:
 
         scanRefDir = self.scanRefDir
         doCovers = self.doCovers
+        silent = self.silent
 
-        self.sizeInfo = {}
-
-        for kind in (&#34;covers&#34;, &#34;pages&#34;) if doCovers else (&#34;pages&#34;,):
-            sizeFile = f&#34;{scanRefDir}/sizes_{kind}.tsv&#34;
-
-            sizeInfo = {}
-            self.sizeInfo[kind] = sizeInfo
-
-            maxW, maxH = 0, 0
-
-            n = 0
-
-            totW, totH = 0, 0
-
-            ws, hs = [], []
-
-            if not fileExists(sizeFile):
-                console(f&#34;Size file not found: {sizeFile}&#34;, error=True)
-                return
-
-            with fileOpen(sizeFile) as rh:
-                next(rh)
-                for line in rh:
-                    fields = line.rstrip(&#34;\n&#34;).split(&#34;\t&#34;)
-                    p = fields[0]
-                    (w, h) = (int(x) for x in fields[1:3])
-                    sizeInfo[p] = (w, h)
-                    ws.append(w)
-                    hs.append(h)
-                    n += 1
-                    totW += w
-                    totH += h
-
-                    if w &gt; maxW:
-                        maxW = w
-                    if h &gt; maxH:
-                        maxH = h
-
-            avW = int(round(totW / n))
-            avH = int(round(totH / n))
-
-            devW = int(round(sum(abs(w - avW) for w in ws) / n))
-            devH = int(round(sum(abs(h - avH) for h in hs) / n))
-
-            self.console(f&#34;Maximum dimensions: W = {maxW:&gt;4} H = {maxH:&gt;4}&#34;)
-            self.console(f&#34;Average dimensions: W = {avW:&gt;4} H = {avH:&gt;4}&#34;)
-            self.console(f&#34;Average deviation:  W = {devW:&gt;4} H = {devH:&gt;4}&#34;)
+        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
 
     def getPageSeq(self):
         if self.error:
@@ -436,9 +383,15 @@ class IIIF:
 
         pageItem = templates.coverItem if kind == &#34;covers&#34; else templates.pageItem
 
+        itemsSeen = set()
+
         items = []
 
+        nPages = 0
+
         for p in thesePages:
+            nPages += 1
+
             if zoneBased:
                 (p, region) = p
             else:
@@ -447,6 +400,13 @@ class IIIF:
             item = {}
             w, h = sizeInfo.get(p, (0, 0))
             rot = 0 if rotateInfo is None else rotateInfo.get(p, 0)
+
+            key = (p, w, h, rot)
+
+            if key in itemsSeen:
+                continue
+
+            itemsSeen.add(key)
 
             for k, v in pageItem.items():
                 v = fillinIIIF(
@@ -476,9 +436,9 @@ class IIIF:
 
         data[&#34;items&#34;] = items
 
-        nPages = len(items)
+        nItems = len(items)
 
-        if nPages:
+        if nItems:
             writeJson(
                 data,
                 asFile=(
@@ -487,7 +447,7 @@ class IIIF:
                     else f&#34;{manifestDir}/{folder}/{file}.json&#34;
                 ),
             )
-        return nPages
+        return (nPages, nItems)
 
     def manifests(self):
         if self.error:
@@ -520,31 +480,46 @@ class IIIF:
 
             self.genPages(&#34;covers&#34;)
 
-        n = 0
+        p = 0
+        i = 0
+        m = 0
 
         if manifestLevel == &#34;folder&#34;:
             for folder in folders:
-                n += self.genPages(&#34;pages&#34;, folder=folder)
+                (thisP, thisI) = self.genPages(&#34;pages&#34;, folder=folder)
+                p += thisP
+                i += thisI
+
+                if thisI:
+                    m += 1
         else:
             for folder, files in folders:
-                nf = 0
                 folderDir = f&#34;{manifestDir}/{folder}&#34;
                 initTree(folderDir, fresh=True, gentle=False)
 
-                for file in files:
-                    nf += self.genPages(&#34;pages&#34;, folder=folder, file=file)
+                folderI = 0
 
-                if nf == 0:
+                for file in files:
+                    (thisP, thisI) = self.genPages(&#34;pages&#34;, folder=folder, file=file)
+                    p += thisP
+                    i += thisI
+
+                    if thisI:
+                        m += 1
+
+                    folderI += thisI
+
+                if folderI == 0:
                     dirRemove(folderDir)
-                else:
-                    n += nf
 
         if dirExists(logoInDir):
             dirCopy(logoInDir, logoDir)
         else:
             console(f&#34;Directory with logos not found: {logoInDir}&#34;, error=True)
 
-        self.console(f&#34;IIIF manifests for {n} pages generated in {manifestDir}&#34;)</code></pre>
+        self.console(
+            f&#34;{m} IIIF manifests with {i} items for {p} pages generated in {manifestDir}&#34;
+        )</code></pre>
 </details>
 </section>
 <section>
@@ -631,7 +606,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/bfa40c6be3ca339a5022dd1f690a8305f2b0ff15/tff/convert/iiif.py#L141-L512" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/00b1804a2a0eabefbe45442674c2cdeab9cb62dd/tff/convert/iiif.py#L141-L487" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class IIIF:
     def __init__(
@@ -684,7 +659,16 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         F = app.api.F
         L = app.api.L
 
-        repoLocation = app.repoLocation
+        locations = getImageLocations(app, prod, silent)
+        repoLocation = locations.repoLocation
+        self.scanDir = locations.scanDir
+        self.thumbDir = locations.thumbDir
+        scanRefDir = locations.scanRefDir
+        self.scanRefDir = scanRefDir
+        self.coversDir = locations.coversDir
+        doCovers = locations.doCovers
+        self.doCovers = doCovers
+
         outputDir = (
             f&#34;{repoLocation}/static{teiVersionRep}/{prod}&#34;
             if outputDir is None
@@ -692,23 +676,6 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         )
         self.outputDir = outputDir
         self.manifestDir = f&#34;{outputDir}/manifests&#34;
-        thumbDir = f&#34;{repoLocation}/{app.context.provenanceSpec[&#39;graphicsRelative&#39;]}&#34;
-        self.thumbDir = thumbDir
-        scanDir = f&#34;{repoLocation}/scans&#34;
-        self.scanDir = scanDir
-        scanRefDir = scanDir if prod == &#34;prod&#34; else thumbDir
-        self.scanRefDir = scanRefDir
-        coversDir = f&#34;{scanRefDir}/covers&#34;
-        self.coversDir = coversDir
-
-        if dirExists(coversDir):
-            self.console(f&#34;Found covers in directory: {coversDir}&#34;)
-            doCovers = True
-        else:
-            self.console(f&#34;No cover directory: {coversDir}&#34;)
-            doCovers = False
-
-        self.doCovers = doCovers
 
         self.pagesDir = f&#34;{scanRefDir}/pages&#34;
         self.logoInDir = f&#34;{scanRefDir}/logo&#34;
@@ -800,54 +767,9 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 
         scanRefDir = self.scanRefDir
         doCovers = self.doCovers
+        silent = self.silent
 
-        self.sizeInfo = {}
-
-        for kind in (&#34;covers&#34;, &#34;pages&#34;) if doCovers else (&#34;pages&#34;,):
-            sizeFile = f&#34;{scanRefDir}/sizes_{kind}.tsv&#34;
-
-            sizeInfo = {}
-            self.sizeInfo[kind] = sizeInfo
-
-            maxW, maxH = 0, 0
-
-            n = 0
-
-            totW, totH = 0, 0
-
-            ws, hs = [], []
-
-            if not fileExists(sizeFile):
-                console(f&#34;Size file not found: {sizeFile}&#34;, error=True)
-                return
-
-            with fileOpen(sizeFile) as rh:
-                next(rh)
-                for line in rh:
-                    fields = line.rstrip(&#34;\n&#34;).split(&#34;\t&#34;)
-                    p = fields[0]
-                    (w, h) = (int(x) for x in fields[1:3])
-                    sizeInfo[p] = (w, h)
-                    ws.append(w)
-                    hs.append(h)
-                    n += 1
-                    totW += w
-                    totH += h
-
-                    if w &gt; maxW:
-                        maxW = w
-                    if h &gt; maxH:
-                        maxH = h
-
-            avW = int(round(totW / n))
-            avH = int(round(totH / n))
-
-            devW = int(round(sum(abs(w - avW) for w in ws) / n))
-            devH = int(round(sum(abs(h - avH) for h in hs) / n))
-
-            self.console(f&#34;Maximum dimensions: W = {maxW:&gt;4} H = {maxH:&gt;4}&#34;)
-            self.console(f&#34;Average dimensions: W = {avW:&gt;4} H = {avH:&gt;4}&#34;)
-            self.console(f&#34;Average deviation:  W = {devW:&gt;4} H = {devH:&gt;4}&#34;)
+        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
 
     def getPageSeq(self):
         if self.error:
@@ -896,9 +818,15 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 
         pageItem = templates.coverItem if kind == &#34;covers&#34; else templates.pageItem
 
+        itemsSeen = set()
+
         items = []
 
+        nPages = 0
+
         for p in thesePages:
+            nPages += 1
+
             if zoneBased:
                 (p, region) = p
             else:
@@ -907,6 +835,13 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
             item = {}
             w, h = sizeInfo.get(p, (0, 0))
             rot = 0 if rotateInfo is None else rotateInfo.get(p, 0)
+
+            key = (p, w, h, rot)
+
+            if key in itemsSeen:
+                continue
+
+            itemsSeen.add(key)
 
             for k, v in pageItem.items():
                 v = fillinIIIF(
@@ -936,9 +871,9 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 
         data[&#34;items&#34;] = items
 
-        nPages = len(items)
+        nItems = len(items)
 
-        if nPages:
+        if nItems:
             writeJson(
                 data,
                 asFile=(
@@ -947,7 +882,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
                     else f&#34;{manifestDir}/{folder}/{file}.json&#34;
                 ),
             )
-        return nPages
+        return (nPages, nItems)
 
     def manifests(self):
         if self.error:
@@ -980,31 +915,46 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 
             self.genPages(&#34;covers&#34;)
 
-        n = 0
+        p = 0
+        i = 0
+        m = 0
 
         if manifestLevel == &#34;folder&#34;:
             for folder in folders:
-                n += self.genPages(&#34;pages&#34;, folder=folder)
+                (thisP, thisI) = self.genPages(&#34;pages&#34;, folder=folder)
+                p += thisP
+                i += thisI
+
+                if thisI:
+                    m += 1
         else:
             for folder, files in folders:
-                nf = 0
                 folderDir = f&#34;{manifestDir}/{folder}&#34;
                 initTree(folderDir, fresh=True, gentle=False)
 
-                for file in files:
-                    nf += self.genPages(&#34;pages&#34;, folder=folder, file=file)
+                folderI = 0
 
-                if nf == 0:
+                for file in files:
+                    (thisP, thisI) = self.genPages(&#34;pages&#34;, folder=folder, file=file)
+                    p += thisP
+                    i += thisI
+
+                    if thisI:
+                        m += 1
+
+                    folderI += thisI
+
+                if folderI == 0:
                     dirRemove(folderDir)
-                else:
-                    n += nf
 
         if dirExists(logoInDir):
             dirCopy(logoInDir, logoDir)
         else:
             console(f&#34;Directory with logos not found: {logoInDir}&#34;, error=True)
 
-        self.console(f&#34;IIIF manifests for {n} pages generated in {manifestDir}&#34;)</code></pre>
+        self.console(
+            f&#34;{m} IIIF manifests with {i} items for {p} pages generated in {manifestDir}&#34;
+        )</code></pre>
 </details>
 <h3>Methods</h3>
 <dl>

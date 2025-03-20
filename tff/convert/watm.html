@@ -509,7 +509,7 @@ information from reaching the WATM.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/bfa40c6be3ca339a5022dd1f690a8305f2b0ff15/tff/convert/watm.py#L1-L2794" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/00b1804a2a0eabefbe45442674c2cdeab9cb62dd/tff/convert/watm.py#L1-L2946" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">&#34;&#34;&#34;Export to Web Annotation Text Model
 
@@ -1006,7 +1006,7 @@ from tf.parameters import OTYPE, OSLOTS
 from tf.app import use
 
 from ..parameters import URL_TF_DOCS
-from .iiif import parseIIIF
+from .iiif import parseIIIF, getImageSizes, getImageLocations
 from .helpers import getPageInfo
 
 AFTER = &#34;after&#34;
@@ -1138,7 +1138,11 @@ def getResultDir(baseDir, headPart, version, prod, silent, withSuffix=True):
     -------
     The path to the versioned dir where the WATM ends up.
     &#34;&#34;&#34;
-    prodRep = &#34;production&#34; if prod == &#34;prod&#34; else &#34;preview&#34; if prod == &#34;preview&#34; else &#34;development&#34;
+    prodRep = (
+        &#34;production&#34;
+        if prod == &#34;prod&#34;
+        else &#34;preview&#34; if prod == &#34;preview&#34; else &#34;development&#34;
+    )
     prodFix = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;} else &#34;dev&#34;
     resultDirBase = f&#34;{baseDir}{headPart}/{TT_NAME}&#34;
     initTree(resultDirBase, fresh=False)
@@ -1225,13 +1229,32 @@ def operationalize(data):
     *   `«parameter»` refers to values defined in the `switches` and `constants`
         top-level sections. They may contain placeholders for variables, i.e. things
         that will be filled in from the data, not from config settings.
-    *   `{variable}`.  Values obtained from the data.]
+    *   `{variable}`.  Values obtained from the data.
         Variables are looked up when going through the (Text-Fabric) data, node by node.
+    *   A function call. The list of supported functions is:
+
+        -   `px`: compute absolute pixel values out of percentage values.
+            It takes 2 arguments: file name and region specifier.
+            The region specifier has the form `pct:x,y,w,h`. If not
+            the result is equal to `full`.
+            The file name is the file name of the image, by which the absolute size can
+            be retrieved.
+            The result has the form x,y,w,h where these are now pixel values.
+
+        The syntax of a function call is:
+
+        ```
+        fname:|param1|param2| ...
+        ```
+
+        The last param does not need to be terminated by a `|`
 
         For each node, we know what the relevant page scan is.
 
         There is a limited supply of variables:
 
+        *   `folder`: the name of the folder the page is in;
+        *   `file`: the name of the file the page is in;
         *   `region`: the region of interest on a scan, given as a IIIF region value:
             `full` or *x,y,w,h* or `pct:`*x,y,w,h*.
         *   `rot`: the rotation to be applied when showing a scan.
@@ -1253,7 +1276,7 @@ def operationalize(data):
     lookup the first parent of that node type. The second part is the feature name,
     and we take the value of that feature from that parent.
 
-    Only for the variable `node` you have extra possibilities:
+    For the variable `node` you have extra possibilities:
 
     *   `=+1`: take the current node and add 1.
     *   `=-1`: take the current node and subtract 1
@@ -1266,6 +1289,17 @@ def operationalize(data):
         The iiif.yml settings, and then the `scans` part.
     &#34;&#34;&#34;
     scanInfo = {}
+    funcRe = re.compile(
+        r&#34;&#34;&#34;
+        ^
+        ([a-zA-Z][a-zA-Z0-9_]*)
+        :\|
+        (.*)
+        $
+        &#34;&#34;&#34;,
+        re.X | re.S,
+    )
+    warnings = {}
 
     for extraFeat, featInfo in data.items():
         for nodeType, info in featInfo.items():
@@ -1302,9 +1336,88 @@ def operationalize(data):
 
                 newVars[name] = (parent, child, feat, shift)
 
+            match = funcRe.match(value)
+
+            if match:
+                good = True
+
+                funcName, args = match.group(1, 2)
+
+                if funcName != &#34;px&#34;:
+                    warnings.setdefault(&#34;unknown function name&#34;, []).append(
+                        f&#34;{extraFeat}.{nodeType}: {value}&#34;
+                    )
+                    good = False
+
+                args = args.split(&#34;|&#34;)
+
+                if len(args) != 2:
+                    warnings.setdefault(&#34;#args = {nArgs} != 2&#34;, []).append(value)
+
+                if good:
+                    value = (funcName, *args)
+
             scanInfo.setdefault(nodeType, []).append((extraFeat, value, newVars))
 
-    return scanInfo
+    for msg, cases in warnings.items():
+        nCases = len(cases)
+        console(f&#34;CONFIG: {msg} ({nCases}x)&#34;, error=True)
+
+        for case in cases:
+            console(f&#34;\t{case}&#34;, error=True)
+
+    return (len(warnings) == 0, scanInfo)
+
+
+def funcPx(F, L, sizeInfo, feat, otype, node, facsFile, region, warnings):
+
+    file = F.file.v(L.u(node, otype=&#34;file&#34;)[0])
+    folder = F.folder.v(L.u(node, otype=&#34;folder&#34;)[0])
+    msg = f&#34;{folder}/{file}: {feat}.{otype}: &#39;{facsFile}&#39; | &#39;{region}&#39;&#34;
+
+    absSize = sizeInfo.get(facsFile, None)
+
+    if absSize is None:
+        if not facsFile or facsFile == &#34;unknown&#34;:
+            warnings.setdefault(&#34;missing page image&#34;, []).append(msg)
+        else:
+            warnings.setdefault(&#34;missing absolute size&#34;, []).append(msg)
+
+        return &#34;full&#34;
+
+    if len(absSize) != 2:
+        warnings.setdefault(&#34;#abs dims != 2&#34;, []).append(msg)
+        return &#34;full&#34;
+
+    absW, absH = absSize
+
+    if not region.startswith(&#34;pct:&#34;):
+        warnings.setdefault(&#34;not pct dims&#34;, []).append(msg)
+        return &#34;full&#34;
+
+    pctDims = region[4:].split(&#34;,&#34;)
+
+    if len(pctDims) != 4:
+        warnings.setdefault(&#34;#pct dims != 4&#34;, []).append(msg)
+        return &#34;full&#34;
+
+    pctDimsInt = []
+
+    for x in pctDims:
+        if not x.isdecimal():
+            warnings.setdefault(&#34;pct dim not int&#34;, []).append(msg)
+            return &#34;full&#34;
+
+        pctDimsInt.append(int(x))
+
+    (pctX, pctY, pctW, pctH) = pctDimsInt
+
+    pxX = int(round(pctX * absW / 100))
+    pxY = int(round(pctY * absH / 100))
+    pxW = int(round(pctW * absW / 100))
+    pxH = int(round(pctH * absH / 100))
+
+    return f&#34;{pxX},{pxY},{pxW},{pxH}&#34;
 
 
 class WATM:
@@ -1405,12 +1518,15 @@ class WATM:
         if not ok:
             self.error = True
 
+        self.error = False
+
         zoneBased = settings.get(&#34;zoneBased&#34;, False)
         self.zoneBased = zoneBased
         iiifSettings = parseIIIF(settings, prod, &#34;scans&#34;, **kwargs) if settings else {}
-        self.scanInfo = operationalize(iiifSettings)
+        (good, self.scanInfo) = operationalize(iiifSettings)
 
-        self.error = False
+        if not good:
+            self.error = True
 
         textRepoLevel = cfg.textRepoLevel or 1
 
@@ -1543,6 +1659,12 @@ class WATM:
             skipMeta = False
 
         self.skipMeta = skipMeta
+
+        imageLocations = getImageLocations(app, prod, silent)
+        scanRefDir = imageLocations.scanRefDir
+        doCovers = imageLocations.doCovers
+
+        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
 
     def console(self, msg, **kwargs):
         &#34;&#34;&#34;Print something to the output.
@@ -1681,6 +1803,8 @@ class WATM:
         excludeElements = self.excludeElements
         excludeFeatures = self.excludeFeatures
         scanInfo = self.scanInfo
+        sizeInfo = self.sizeInfo.get(&#34;pages&#34;, {})
+        silent = self.silent
 
         waFromTF = self.waFromTF
 
@@ -1696,6 +1820,8 @@ class WATM:
         invertedTargets = []
         farTargets = []
         discontinuousNodes = collections.defaultdict(list)
+
+        warnings = {}
 
         def mkSingleTarget(n):
             ts = waFromTF[n]
@@ -1771,16 +1897,42 @@ class WATM:
                                     valuesOK = False
                                     break
 
-                            values[var] = refN if feat == &#34;=&#34; else Fs(feat).v(refN)
+                            thisValue = refN if feat == &#34;=&#34; else Fs(feat).v(refN)
+
+                            values[var] = thisValue
 
                         if not valuesOK:
                             continue
 
-                        val = value.format(**values)
+                        val = None
+
+                        if type(value) is tuple:
+                            if value[0] == &#34;px&#34;:
+                                val = funcPx(
+                                    F,
+                                    L,
+                                    sizeInfo,
+                                    extraFeat,
+                                    otype,
+                                    n,
+                                    *[v.format(**values) for v in value[1:]],
+                                    warnings,
+                                )
+                        else:
+                            val = value.format(**values)
 
                         self.mkAnno(
                             KIND_ATTR, NS_TV, f&#34;{extraFeat}={val}&#34;, mkSingleTarget(n)
                         )
+
+        for msg, cases in warnings.items():
+            nCases = len(cases)
+            console(f&#34;RUNTIME: {msg} ({nCases}x)&#34;, error=True)
+
+            for case in (cases[0:5] if silent else cases):
+                console(f&#34;\t{case}&#34;, error=True)
+
+        warnings = None
 
         for feat in nodeFeatures:
             if feat in excludeFeatures:
@@ -2045,7 +2197,7 @@ class WATM:
         sep = &#34;&#34; if nTexts == 1 else &#34;s&#34;
 
         self.console(&#34;&#34;)
-        self.console(f&#34;Text files all: {total:&gt;8} segments to {nTexts} file{sep}&#34;)
+        console(f&#34;Text files all: {total:&gt;8} segments to {nTexts} file{sep}&#34;)
 
         # annotation files
 
@@ -3314,6 +3466,12 @@ class WATMS:
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
+<dt id="tff.convert.watm.funcPx"><code class="name flex">
+<span>def <span class="ident">funcPx</span></span>(<span>F, L, sizeInfo, feat, otype, node, facsFile, region, warnings)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
 <dt id="tff.convert.watm.getResultDir"><code class="name flex">
 <span>def <span class="ident">getResultDir</span></span>(<span>baseDir, headPart, version, prod, silent, withSuffix=True)</span>
 </code></dt>
@@ -3384,13 +3542,28 @@ Macros may contain other place holders.</li>
 <li><code>«parameter»</code> refers to values defined in the <code>switches</code> and <code>constants</code>
 top-level sections. They may contain placeholders for variables, i.e. things
 that will be filled in from the data, not from config settings.</li>
+<li><code>{variable}</code>.
+Values obtained from the data.
+Variables are looked up when going through the (Text-Fabric) data, node by node.</li>
 <li>
-<p><code>{variable}</code>.
-Values obtained from the data.]
-Variables are looked up when going through the (Text-Fabric) data, node by node.</p>
+<p>A function call. The list of supported functions is:</p>
+<ul>
+<li><code>px</code>: compute absolute pixel values out of percentage values.
+It takes 2 arguments: file name and region specifier.
+The region specifier has the form <code>pct:x,y,w,h</code>. If not
+the result is equal to <code>full</code>.
+The file name is the file name of the image, by which the absolute size can
+be retrieved.
+The result has the form x,y,w,h where these are now pixel values.</li>
+</ul>
+<p>The syntax of a function call is:</p>
+<p><code>fname:|param1|param2| ...</code></p>
+<p>The last param does not need to be terminated by a <code>|</code></p>
 <p>For each node, we know what the relevant page scan is.</p>
 <p>There is a limited supply of variables:</p>
 <ul>
+<li><code>folder</code>: the name of the folder the page is in;</li>
+<li><code>file</code>: the name of the file the page is in;</li>
 <li><code>region</code>: the region of interest on a scan, given as a IIIF region value:
 <code>full</code> or <em>x,y,w,h</em> or <code>pct:</code><em>x,y,w,h</em>.</li>
 <li><code>rot</code>: the rotation to be applied when showing a scan.</li>
@@ -3409,7 +3582,7 @@ in question will be retrieved.</p>
 <p>But if there is a <code>.</code> in the name, the first part is a parent node type, and we
 lookup the first parent of that node type. The second part is the feature name,
 and we take the value of that feature from that parent.</p>
-<p>Only for the variable <code>node</code> you have extra possibilities:</p>
+<p>For the variable <code>node</code> you have extra possibilities:</p>
 <ul>
 <li><code>=+1</code>: take the current node and add 1.</li>
 <li><code>=-1</code>: take the current node and subtract 1</li>
@@ -3499,7 +3672,7 @@ versions in the <code>watm</code> directory.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/bfa40c6be3ca339a5022dd1f690a8305f2b0ff15/tff/convert/watm.py#L797-L2641" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/00b1804a2a0eabefbe45442674c2cdeab9cb62dd/tff/convert/watm.py#L910-L2793" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class WATM:
     &#34;&#34;&#34;The export machinery is exposed as a class, wrapped around a TF dataset.&#34;&#34;&#34;
@@ -3599,12 +3772,15 @@ versions in the <code>watm</code> directory.</p>
         if not ok:
             self.error = True
 
+        self.error = False
+
         zoneBased = settings.get(&#34;zoneBased&#34;, False)
         self.zoneBased = zoneBased
         iiifSettings = parseIIIF(settings, prod, &#34;scans&#34;, **kwargs) if settings else {}
-        self.scanInfo = operationalize(iiifSettings)
+        (good, self.scanInfo) = operationalize(iiifSettings)
 
-        self.error = False
+        if not good:
+            self.error = True
 
         textRepoLevel = cfg.textRepoLevel or 1
 
@@ -3737,6 +3913,12 @@ versions in the <code>watm</code> directory.</p>
             skipMeta = False
 
         self.skipMeta = skipMeta
+
+        imageLocations = getImageLocations(app, prod, silent)
+        scanRefDir = imageLocations.scanRefDir
+        doCovers = imageLocations.doCovers
+
+        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
 
     def console(self, msg, **kwargs):
         &#34;&#34;&#34;Print something to the output.
@@ -3875,6 +4057,8 @@ versions in the <code>watm</code> directory.</p>
         excludeElements = self.excludeElements
         excludeFeatures = self.excludeFeatures
         scanInfo = self.scanInfo
+        sizeInfo = self.sizeInfo.get(&#34;pages&#34;, {})
+        silent = self.silent
 
         waFromTF = self.waFromTF
 
@@ -3890,6 +4074,8 @@ versions in the <code>watm</code> directory.</p>
         invertedTargets = []
         farTargets = []
         discontinuousNodes = collections.defaultdict(list)
+
+        warnings = {}
 
         def mkSingleTarget(n):
             ts = waFromTF[n]
@@ -3965,16 +4151,42 @@ versions in the <code>watm</code> directory.</p>
                                     valuesOK = False
                                     break
 
-                            values[var] = refN if feat == &#34;=&#34; else Fs(feat).v(refN)
+                            thisValue = refN if feat == &#34;=&#34; else Fs(feat).v(refN)
+
+                            values[var] = thisValue
 
                         if not valuesOK:
                             continue
 
-                        val = value.format(**values)
+                        val = None
+
+                        if type(value) is tuple:
+                            if value[0] == &#34;px&#34;:
+                                val = funcPx(
+                                    F,
+                                    L,
+                                    sizeInfo,
+                                    extraFeat,
+                                    otype,
+                                    n,
+                                    *[v.format(**values) for v in value[1:]],
+                                    warnings,
+                                )
+                        else:
+                            val = value.format(**values)
 
                         self.mkAnno(
                             KIND_ATTR, NS_TV, f&#34;{extraFeat}={val}&#34;, mkSingleTarget(n)
                         )
+
+        for msg, cases in warnings.items():
+            nCases = len(cases)
+            console(f&#34;RUNTIME: {msg} ({nCases}x)&#34;, error=True)
+
+            for case in (cases[0:5] if silent else cases):
+                console(f&#34;\t{case}&#34;, error=True)
+
+        warnings = None
 
         for feat in nodeFeatures:
             if feat in excludeFeatures:
@@ -4239,7 +4451,7 @@ versions in the <code>watm</code> directory.</p>
         sep = &#34;&#34; if nTexts == 1 else &#34;s&#34;
 
         self.console(&#34;&#34;)
-        self.console(f&#34;Text files all: {total:&gt;8} segments to {nTexts} file{sep}&#34;)
+        console(f&#34;Text files all: {total:&gt;8} segments to {nTexts} file{sep}&#34;)
 
         # annotation files
 
@@ -5612,7 +5824,7 @@ See <code><a title="tff.convert.watm.WATM" href="#tff.convert.watm.WATM">WATM</a
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/bfa40c6be3ca339a5022dd1f690a8305f2b0ff15/tff/convert/watm.py#L2644-L2794" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/00b1804a2a0eabefbe45442674c2cdeab9cb62dd/tff/convert/watm.py#L2796-L2946" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class WATMS:
     &#34;&#34;&#34;Export corpora that are divided over multiple TF datasets.
@@ -5878,6 +6090,7 @@ setTimeout(() => input.focus(), 100);
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
+<li><code><a title="tff.convert.watm.funcPx" href="#tff.convert.watm.funcPx">funcPx</a></code></li>
 <li><code><a title="tff.convert.watm.getResultDir" href="#tff.convert.watm.getResultDir">getResultDir</a></code></li>
 <li><code><a title="tff.convert.watm.operationalize" href="#tff.convert.watm.operationalize">operationalize</a></code></li>
 <li><code><a title="tff.convert.watm.rep" href="#tff.convert.watm.rep">rep</a></code></li>

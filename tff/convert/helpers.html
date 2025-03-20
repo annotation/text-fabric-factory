@@ -31,13 +31,14 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/bfa40c6be3ca339a5022dd1f690a8305f2b0ff15/tff/convert/helpers.py#L1-L785" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/00b1804a2a0eabefbe45442674c2cdeab9cb62dd/tff/convert/helpers.py#L1-L867" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">import re
 from textwrap import dedent
 
+from tf.core.generic import AttrDict
 from tf.core.helpers import console
-from tf.core.files import fileExists, readJson, readYaml, stripExt
+from tf.core.files import fileExists, readJson, readYaml, stripExt, fileOpen, dirExists
 
 
 PRE = &#34;pre&#34;
@@ -817,7 +818,88 @@ def getPageInfo(pageInfoDir, zoneBased, manifestLevel):
     else:
         result = dict(pages=pages)
 
-    return result</code></pre>
+    return result
+
+
+def getImageSizes(scanRefDir, doCovers, silent):
+    sizeInfo = {}
+
+    for kind in (&#34;covers&#34;, &#34;pages&#34;) if doCovers else (&#34;pages&#34;,):
+        sizeFile = f&#34;{scanRefDir}/sizes_{kind}.tsv&#34;
+
+        thisSizeInfo = {}
+        sizeInfo[kind] = thisSizeInfo
+
+        maxW, maxH = 0, 0
+
+        n = 0
+
+        totW, totH = 0, 0
+
+        ws, hs = [], []
+
+        if not fileExists(sizeFile):
+            console(f&#34;Size file not found: {sizeFile}&#34;, error=True)
+            return
+
+        with fileOpen(sizeFile) as rh:
+            next(rh)
+            for line in rh:
+                fields = line.rstrip(&#34;\n&#34;).split(&#34;\t&#34;)
+                p = fields[0]
+                (w, h) = (int(x) for x in fields[1:3])
+                thisSizeInfo[p] = (w, h)
+                ws.append(w)
+                hs.append(h)
+                n += 1
+                totW += w
+                totH += h
+
+                if w &gt; maxW:
+                    maxW = w
+                if h &gt; maxH:
+                    maxH = h
+
+        avW = int(round(totW / n))
+        avH = int(round(totH / n))
+
+        devW = int(round(sum(abs(w - avW) for w in ws) / n))
+        devH = int(round(sum(abs(h - avH) for h in hs) / n))
+
+        if not silent:
+            console(f&#34;Maximum dimensions: W = {maxW:&gt;4} H = {maxH:&gt;4}&#34;)
+            console(f&#34;Average dimensions: W = {avW:&gt;4} H = {avH:&gt;4}&#34;)
+            console(f&#34;Average deviation:  W = {devW:&gt;4} H = {devH:&gt;4}&#34;)
+
+    return sizeInfo
+
+
+def getImageLocations(app, prod, silent):
+    repoLocation = app.repoLocation
+    scanDir = f&#34;{repoLocation}/scans&#34;
+    thumbDir = f&#34;{repoLocation}/{app.context.provenanceSpec[&#39;graphicsRelative&#39;]}&#34;
+    scanRefDir = scanDir if prod == &#34;prod&#34; else thumbDir
+    coversDir = f&#34;{scanRefDir}/covers&#34;
+
+    if dirExists(coversDir):
+        if not silent:
+            console(f&#34;Found covers in directory: {coversDir}&#34;)
+
+        doCovers = True
+    else:
+        if not silent:
+            console(f&#34;No cover directory: {coversDir}&#34;)
+
+        doCovers = False
+
+    return AttrDict(
+        repoLocation=repoLocation,
+        scanDir=scanDir,
+        thumbDir=thumbDir,
+        scanRefDir=scanRefDir,
+        coversDir=coversDir,
+        doCovers=doCovers,
+    )</code></pre>
 </details>
 </section>
 <section>
@@ -946,6 +1028,18 @@ or by elements within a single TEI source file.</p>
 <dl>
 <dt id="tff.convert.helpers.checkModel"><code class="name flex">
 <span>def <span class="ident">checkModel</span></span>(<span>kind, thisModel, verbose)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="tff.convert.helpers.getImageLocations"><code class="name flex">
+<span>def <span class="ident">getImageLocations</span></span>(<span>app, prod, silent)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="tff.convert.helpers.getImageSizes"><code class="name flex">
+<span>def <span class="ident">getImageSizes</span></span>(<span>scanRefDir, doCovers, silent)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
@@ -1124,6 +1218,8 @@ setTimeout(() => input.focus(), 100);
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="two-column">
 <li><code><a title="tff.convert.helpers.checkModel" href="#tff.convert.helpers.checkModel">checkModel</a></code></li>
+<li><code><a title="tff.convert.helpers.getImageLocations" href="#tff.convert.helpers.getImageLocations">getImageLocations</a></code></li>
+<li><code><a title="tff.convert.helpers.getImageSizes" href="#tff.convert.helpers.getImageSizes">getImageSizes</a></code></li>
 <li><code><a title="tff.convert.helpers.getPageInfo" href="#tff.convert.helpers.getPageInfo">getPageInfo</a></code></li>
 <li><code><a title="tff.convert.helpers.getWhites" href="#tff.convert.helpers.getWhites">getWhites</a></code></li>
 <li><code><a title="tff.convert.helpers.lookupSource" href="#tff.convert.helpers.lookupSource">lookupSource</a></code></li>
