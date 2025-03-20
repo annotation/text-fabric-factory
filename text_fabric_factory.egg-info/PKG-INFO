@@ -1,6 +1,6 @@
-Metadata-Version: 2.2
+Metadata-Version: 2.4
 Name: text-fabric-factory
-Version: 1.0.1
+Version: 1.0.2
 Summary: Factory for Text-Fabric datasets
 Home-page: https://github.com/annotation/text-fabric-factory
 Author: Dirk Roorda
@@ -28,5 +28,6 @@ Requires-Python: >=3.9.0
 License-File: LICENSE
 Requires-Dist: wheel
 Requires-Dist: text-fabric
+Dynamic: license-file
 
 file README.md
