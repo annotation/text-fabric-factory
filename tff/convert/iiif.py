@@ -3,11 +3,13 @@ from tf.core.files import (
     fileOpen,
     fileExists,
     initTree,
+    dirNm,
     dirExists,
     dirRemove,
     dirCopy,
     dirContents,
     stripExt,
+    abspath,
 )
 from tf.core.generic import AttrDict
 from tf.core.helpers import console, readCfg
@@ -40,7 +42,7 @@ def fillinIIIF(data, **kwargs):
     return data
 
 
-def parseIIIF(settings, prod, selector, **kwargs):
+def parseIIIF(settings, prod, selector, locally=False, **kwargs):
     """Parse the iiif yml file and deliver a filled in section.
 
     The iiif.yml file contains switches and constants and macros which then are used
@@ -72,12 +74,23 @@ def parseIIIF(settings, prod, selector, **kwargs):
         Additional optional parameters to pass as key value pairs to
         the iiif config file. These values will be filled in for place holders
         of the form `[`*arg*`]`.
+    locally: boolean, optional False
+        If True, assume manifests are generated for usage on a local deployment of the
+        IIIF server.
     """
 
     def applySwitches(prod, constants, switches):
         if len(switches):
             for k, v in switches[prod].items():
                 constants[k] = v
+
+            if prod == "preview":
+                if "server" in constants:
+                    previewServer = constants["server"]
+                    previewServerLocal = switches.get("dev", {}).get(
+                        "server", previewServer
+                    )
+                    constants["server"] = previewServerLocal
 
         return constants
 
@@ -146,6 +159,7 @@ class IIIF:
         pageInfoDir,
         outputDir=None,
         prod="dev",
+        locally=False,
         silent=False,
         **kwargs,
     ):
@@ -169,6 +183,10 @@ class IIIF:
         prod: string, optional dev
             Whether the manifests are for production (`prod`) or development (`dev`)
             of preview (`preview`)
+        locally: whether we are running on a local machine or on a server;
+            this is only relevant if `prod == "preview"`. In that case, `locally`
+            distinguishes whether we run de preview machinery on a local development
+            computer, or on a server within public-facing infrastructure
         silent: boolean, optional False
             Whether to suppress output messages
         kwargs: dict
@@ -188,6 +206,9 @@ class IIIF:
 
         F = app.api.F
         L = app.api.L
+
+        myDir = dirNm(abspath(__file__))
+        self.myDir = myDir
 
         locations = getImageLocations(app, prod, silent)
         repoLocation = locations.repoLocation
@@ -211,6 +232,9 @@ class IIIF:
         self.logoInDir = f"{scanRefDir}/logo"
         self.logoDir = f"{outputDir}/logo"
 
+        self.miradorHtmlIn = f"{myDir}/mirador.html"
+        self.miradorHtmlOut = f"{outputDir}/mirador.html"
+
         if doCovers:
             self.coversHtmlIn = f"{repoLocation}/programs/covers.html"
             self.coversHtmlOut = f"{outputDir}/covers.html"
@@ -227,7 +251,10 @@ class IIIF:
         console(f"Manifestlevel = {manifestLevel}")
         self.manifestLevel = manifestLevel
 
-        self.templates = parseIIIF(settings, prod, "templates", **kwargs)
+        self.mirador = parseIIIF(settings, prod, "mirador", locally=locally, **kwargs)
+        self.templates = parseIIIF(
+            settings, prod, "templates", locally=locally, **kwargs
+        )
 
         folders = (
             [F.folder.v(f) for f in F.otype.s("folder")]
@@ -327,7 +354,7 @@ class IIIF:
 
     def genPages(self, kind, folder=None, file=None):
         if self.error:
-            return
+            return (0, 0)
 
         manifestLevel = self.manifestLevel
         zoneBased = self.settings.get("zoneBased", False)
@@ -358,7 +385,14 @@ class IIIF:
             nPages += 1
 
             if zoneBased:
-                (p, region) = p
+                if type(p) is str:
+                    (p, region) = (p, "full")
+                elif len(p) == 0:
+                    (p, region) = ("NA", "full")
+                elif len(p) == 1:
+                    (p, region) = (p[0], "full")
+                else:
+                    (p, region) = p[0:2]
             else:
                 region = "full"
 
@@ -418,6 +452,7 @@ class IIIF:
         if self.error:
             return
 
+        mirador = self.mirador
         folders = self.folders
         manifestDir = self.manifestDir
         logoInDir = self.logoInDir
@@ -430,6 +465,18 @@ class IIIF:
         server = settings["switches"][prod]["server"]
 
         initTree(manifestDir, fresh=True)
+
+        miradorHtmlIn = self.miradorHtmlIn
+        miradorHtmlOut = self.miradorHtmlOut
+
+        with fileOpen(miradorHtmlIn) as fh:
+            miradorHtml = fh.read()
+
+        miradorHtml = miradorHtml.replace("«manifests»", mirador.manifests)
+        miradorHtml = miradorHtml.replace("«example»", mirador.example)
+
+        with fileOpen(miradorHtmlOut, "w") as fh:
+            fh.write(miradorHtml)
 
         if doCovers:
             coversHtmlIn = self.coversHtmlIn
