@@ -90,13 +90,14 @@ def parseIIIF(settings, prod, selector, locally=False, **kwargs):
             for k, v in switches[prod].items():
                 constants[k] = v
 
-            if prod == "preview":
-                if "server" in constants:
-                    previewServer = constants["server"]
-                    previewServerLocal = switches.get("dev", {}).get(
-                        "server", previewServer
-                    )
-                    constants["server"] = previewServerLocal
+            if locally:
+                if prod == "preview":
+                    if "server" in constants:
+                        previewServer = constants["server"]
+                        previewServerLocal = switches.get("dev", {}).get(
+                            "server", previewServer
+                        )
+                        constants["server"] = previewServerLocal
 
         return constants
 
@@ -258,6 +259,10 @@ class IIIF:
         manifestLevel = settings.get("manifestLevel", "folder")
         console(f"Manifestlevel = {manifestLevel}")
         self.manifestLevel = manifestLevel
+
+        if prod == "preview":
+            localRep = "the local machine" if locally else "the server"
+            console(f"Generated urls address {localRep}")
 
         self.mirador = parseIIIF(settings, prod, "mirador", locally=locally, **kwargs)
         self.templates = parseIIIF(
