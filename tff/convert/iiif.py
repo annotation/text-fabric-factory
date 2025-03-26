@@ -334,7 +334,7 @@ class IIIF:
         doCovers = self.doCovers
         silent = self.silent
 
-        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
+        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent) or {}
 
     def getPageSeq(self):
         if self.error:
@@ -373,7 +373,7 @@ class IIIF:
         zoneBased = settings.get("zoneBased", False)
 
         templates = self.templates
-        sizeInfo = self.sizeInfo[kind]
+        sizeInfo = self.sizeInfo.get(kind, {})
         rotateInfo = None if kind == "covers" else self.rotateInfo
         things = self.pages[kind]
         theseThings = things if folder is None else things.get(folder, None)
