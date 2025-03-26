@@ -493,7 +493,13 @@ from tf.parameters import OTYPE, OSLOTS
 from tf.app import use
 
 from ..parameters import URL_TF_DOCS
-from .iiif import parseIIIF, getImageSizes, getImageLocations
+from .iiif import (
+    parseIIIF,
+    getImageSizes,
+    getImageLocations,
+    FILE_NOT_FOUND,
+    FILE_NOT_FOUND_SIZES,
+)
 from .helpers import getPageInfo
 
 AFTER = "after"
@@ -780,7 +786,7 @@ def operationalize(data):
         r"""
         ^
         ([a-zA-Z][a-zA-Z0-9_]*)
-        :\|
+        :‖
         (.*)
         $
         """,
@@ -830,16 +836,22 @@ def operationalize(data):
 
                 funcName, args = match.group(1, 2)
 
-                if funcName != "px":
+                if funcName not in {"px", "checkPage"}:
                     warnings.setdefault("unknown function name", []).append(
                         f"{extraFeat}.{nodeType}: {value}"
                     )
                     good = False
 
-                args = args.split("|")
+                args = args.split("‖")
+                nArgs = len(args)
+                requiredArgs = (
+                    2 if funcName == "px" else 2 if funcName == "checkPage" else None
+                )
 
-                if len(args) != 2:
-                    warnings.setdefault("#args = {nArgs} != 2", []).append(value)
+                if nArgs != requiredArgs:
+                    warnings.setdefault(
+                        "#args = {nArgs}, should be {requiredArgs}", []
+                    ).append(value)
 
                 if good:
                     value = (funcName, *args)
@@ -862,7 +874,7 @@ def funcPx(F, L, sizeInfo, feat, otype, node, facsFile, region, warnings):
     folder = F.folder.v(L.u(node, otype="folder")[0])
     msg = f"{folder}/{file}: {feat}.{otype}: '{facsFile}' | '{region}'"
 
-    absSize = sizeInfo.get(facsFile, None)
+    absSize = sizeInfo.get(facsFile, FILE_NOT_FOUND_SIZES)
 
     if absSize is None:
         if not facsFile or facsFile == "unknown":
@@ -982,6 +994,7 @@ class WATM:
         self.extra = extra
         self.silent = silent
         self.prod = prod if prod in {"prod", "dev", "preview"} else "dev"
+        self.pageInfoDir = pageInfoDir
         api = app.api
         F = api.F
         E = api.E
@@ -1012,9 +1025,15 @@ class WATM:
 
         self.error = False
 
+        manifestLevel = settings.get("manifestLevel", "folder")
+        console(f"Manifestlevel = {manifestLevel}")
         zoneBased = settings.get("zoneBased", False)
         self.zoneBased = zoneBased
-        iiifSettings = parseIIIF(settings, prod, "scans", locally=locally, **kwargs) if settings else {}
+        iiifSettings = (
+            parseIIIF(settings, prod, "scans", locally=locally, **kwargs)
+            if settings
+            else {}
+        )
         (good, self.scanInfo) = operationalize(iiifSettings)
 
         if not good:
@@ -1101,8 +1120,7 @@ class WATM:
         is_metav = F.is_meta.v if "is_meta" in FAllSet else None
         self.is_metav = is_metav
 
-        folders = [F.folder.v(f) for f in F.otype.s("folder")]
-        self.pages = getPageInfo(pageInfoDir, zoneBased, folders)
+        self.pages = getPageInfo(pageInfoDir, zoneBased, manifestLevel)
 
         inheritFeatures = cfg.inheritFeatures or []
         self.inheritFeatures = inheritFeatures
@@ -1297,6 +1315,17 @@ class WATM:
         scanInfo = self.scanInfo
         sizeInfo = self.sizeInfo.get("pages", {})
         silent = self.silent
+        pageInfoDir = self.pageInfoDir
+        facsMissingFile = f"{pageInfoDir}/facsMissing.tsv"
+        facsMissing = set()
+
+        if fileExists(facsMissingFile):
+            with fileOpen(facsMissingFile) as fh:
+                next(fh)
+
+                for line in fh:
+                    (kind, file, page, n) = line.rstrip("\n").split("\t")
+                    facsMissing.add((kind, page))
 
         waFromTF = self.waFromTF
 
@@ -1410,6 +1439,17 @@ class WATM:
                                     *[v.format(**values) for v in value[1:]],
                                     warnings,
                                 )
+                            elif value[0] == "checkPage":
+                                page = values["page"]
+
+                                if ("pages", page) in facsMissing:
+                                    values["page"] = FILE_NOT_FOUND
+                                    file = values["file"]
+                                    console(
+                                        f"\t{file}: substituted {FILE_NOT_FOUND} for '{page}'",
+                                        error=True,
+                                    )
+                                val = value[-1].format(**values)
                         else:
                             val = value.format(**values)
 
@@ -1421,7 +1461,7 @@ class WATM:
             nCases = len(cases)
             console(f"RUNTIME: {msg} ({nCases}x)", error=True)
 
-            for case in (cases[0:5] if silent else cases):
+            for case in cases[0:5] if silent else cases:
                 console(f"\t{case}", error=True)
 
         warnings = None
@@ -2508,7 +2548,7 @@ class WATM:
             if not feat.startswith("rend_"):
                 continue
 
-            value = feat.split("_", 2)[1]
+            value = feat.split("_", 1)[1]
             if value == "note":
                 continue
 

@@ -1,7 +1,10 @@
+import collections
+
 from tf.core.files import (
     writeJson,
     fileOpen,
     fileExists,
+    fileCopy,
     initTree,
     dirNm,
     dirExists,
@@ -16,6 +19,9 @@ from tf.core.helpers import console, readCfg
 from .helpers import getPageInfo, getImageLocations, getImageSizes
 
 DS_STORE = ".DS_Store"
+
+FILE_NOT_FOUND = "filenotfound"
+FILE_NOT_FOUND_SIZES = (480, 640)
 
 
 def fillinIIIF(data, **kwargs):
@@ -182,7 +188,7 @@ class IIIF:
             the top-level of the repo and within that `prod` or `dev` or `preview`
         prod: string, optional dev
             Whether the manifests are for production (`prod`) or development (`dev`)
-            of preview (`preview`)
+            or preview (`preview`)
         locally: whether we are running on a local machine or on a server;
             this is only relevant if `prod == "preview"`. In that case, `locally`
             distinguishes whether we run de preview machinery on a local development
@@ -219,6 +225,8 @@ class IIIF:
         self.coversDir = locations.coversDir
         doCovers = locations.doCovers
         self.doCovers = doCovers
+
+        self.console(f"Scan images taken from {scanRefDir}")
 
         outputDir = (
             f"{repoLocation}/static{teiVersionRep}/{prod}"
@@ -356,8 +364,13 @@ class IIIF:
         if self.error:
             return (0, 0)
 
+        settings = self.settings
+        scanRefDir = self.scanRefDir
+        ext = settings.get("constants", {}).get("ext", "jpg")
+        missingFiles = self.missingFiles
+
         manifestLevel = self.manifestLevel
-        zoneBased = self.settings.get("zoneBased", False)
+        zoneBased = settings.get("zoneBased", False)
 
         templates = self.templates
         sizeInfo = self.sizeInfo[kind]
@@ -396,9 +409,20 @@ class IIIF:
             else:
                 region = "full"
 
-            item = {}
-            w, h = sizeInfo.get(p, (0, 0))
-            rot = 0 if rotateInfo is None else rotateInfo.get(p, 0)
+            pFile = f"{scanRefDir}/{kind}/{p}.{ext}"
+
+            scanPresent = fileExists(pFile)
+
+            if scanPresent:
+                w, h = sizeInfo.get(p, (0, 0))
+                rot = 0 if rotateInfo is None else rotateInfo.get(p, 0)
+            else:
+                missingFiles.setdefault(kind, {}).setdefault(
+                    file, collections.Counter()
+                )[p] += 1
+                p = FILE_NOT_FOUND
+                w, h = FILE_NOT_FOUND_SIZES
+                rot = 0
 
             key = (p, w, h, rot)
 
@@ -406,6 +430,17 @@ class IIIF:
                 continue
 
             itemsSeen.add(key)
+
+            if not scanPresent:
+                myDir = self.myDir
+                fof = f"{FILE_NOT_FOUND}.{ext}"
+                fofInPath = f"{myDir}/fof/{fof}"
+                fofOutPath = f"{scanRefDir}/{kind}/{fof}"
+
+                if not fileExists(fofOutPath):
+                    fileCopy(fofInPath, fofOutPath)
+
+            item = {}
 
             for k, v in pageItem.items():
                 v = fillinIIIF(
@@ -452,6 +487,7 @@ class IIIF:
         if self.error:
             return
 
+        # silent = self.silent
         mirador = self.mirador
         folders = self.folders
         manifestDir = self.manifestDir
@@ -459,6 +495,7 @@ class IIIF:
         logoDir = self.logoDir
         doCovers = self.doCovers
         manifestLevel = self.manifestLevel
+        pageInfoDir = self.pageInfoDir
 
         prod = self.prod
         settings = self.settings
@@ -477,6 +514,9 @@ class IIIF:
 
         with fileOpen(miradorHtmlOut, "w") as fh:
             fh.write(miradorHtml)
+
+        missingFiles = {}
+        self.missingFiles = missingFiles
 
         if doCovers:
             coversHtmlIn = self.coversHtmlIn
@@ -528,6 +568,27 @@ class IIIF:
             dirCopy(logoInDir, logoDir)
         else:
             console(f"Directory with logos not found: {logoInDir}", error=True)
+
+        if len(missingFiles):
+            console("Missing image files:", error=True)
+
+        with fileOpen(f"{pageInfoDir}/facsMissing.tsv", "w") as fh:
+            fh.write("kind\tfile\tpage\tn\n")
+            nMissing = 0
+
+            for kind, files in missingFiles.items():
+                console(f"\t{kind}:", error=True)
+
+                for file, pages in files.items():
+                    console(f"\t\t{file}:", error=True)
+
+                    for page, n in pages.items():
+                        console(f"\t\t\t{n:>3} x {page}", error=True)
+                        nMissing += n
+
+                        fh.write(f"{kind}\t{file}\t{page}\t{n}\n")
+
+            console(f"\ttotal occurrences of a missing file: {nMissing}")
 
         self.console(
             f"{m} IIIF manifests with {i} items for {p} pages generated in {manifestDir}"

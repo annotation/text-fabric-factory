@@ -843,7 +843,7 @@ def getImageLocations(app, prod, silent):
     repoLocation = app.repoLocation
     scanDir = f"{repoLocation}/scans"
     thumbDir = f"{repoLocation}/{app.context.provenanceSpec['graphicsRelative']}"
-    scanRefDir = scanDir if prod == "prod" else thumbDir
+    scanRefDir = thumbDir if prod == "dev" else scanDir
     coversDir = f"{scanRefDir}/covers"
 
     if dirExists(coversDir):
