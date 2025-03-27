@@ -498,7 +498,7 @@ from .iiif import (
     getImageSizes,
     getImageLocations,
     FILE_NOT_FOUND,
-    FILE_NOT_FOUND_SIZES,
+    # FILE_NOT_FOUND_SIZES,
 )
 from .helpers import getPageInfo
 
@@ -837,9 +837,9 @@ def operationalize(data):
                 funcName, args = match.group(1, 2)
 
                 if funcName not in {"px", "checkPage"}:
-                    warnings.setdefault("unknown function name", []).append(
+                    warnings.setdefault("unknown function name", collections.Counter())[
                         f"{extraFeat}.{nodeType}: {value}"
-                    )
+                    ] += 1
                     good = False
 
                 args = args.split("‖")
@@ -850,71 +850,87 @@ def operationalize(data):
 
                 if nArgs != requiredArgs:
                     warnings.setdefault(
-                        "#args = {nArgs}, should be {requiredArgs}", []
-                    ).append(value)
+                        "#args = {nArgs}, should be {requiredArgs}",
+                        collections.Counter(),
+                    )[value] += 1
 
                 if good:
                     value = (funcName, *args)
 
             scanInfo.setdefault(nodeType, []).append((extraFeat, value, newVars))
 
-    for msg, cases in warnings.items():
-        nCases = len(cases)
-        console(f"CONFIG: {msg} ({nCases}x)", error=True)
-
-        for case in cases:
-            console(f"\t{case}", error=True)
-
+    showWarnings("CONFIG", warnings)
     return (len(warnings) == 0, scanInfo)
 
 
-def funcPx(F, L, sizeInfo, feat, otype, node, facsFile, region, warnings):
+def showWarnings(label, warnings):
+    if len(warnings):
+        console(f"{label} warnings")
 
+        for msg, cases in warnings.items():
+            nCases = sum(cases.values())
+            console(f"\t{nCases:>4}x {msg}", error=True)
+
+            for case, n in cases.items():
+                console(f"\t\t{n:>4}x {case}", error=True)
+
+
+def funcPx(F, L, sizeInfo, facsMissing, feat, otype, node, facsFile, region, warnings):
     file = F.file.v(L.u(node, otype="file")[0])
-    folder = F.folder.v(L.u(node, otype="folder")[0])
-    msg = f"{folder}/{file}: {feat}.{otype}: '{facsFile}' | '{region}'"
 
-    absSize = sizeInfo.get(facsFile, FILE_NOT_FOUND_SIZES)
+    folder = F.folder.v(L.u(node, otype="folder")[0])
+    msg = f"{folder}/{file}: {otype}.{feat}: '{facsFile}' | '{region}'"
+
+    if ("pages", facsFile) in facsMissing:
+        return "full"
+
+    absSize = sizeInfo.get(facsFile, None)
 
     if absSize is None:
-        if not facsFile or facsFile == "unknown":
-            warnings.setdefault("missing page image", []).append(msg)
-        else:
-            warnings.setdefault("missing absolute size", []).append(msg)
-
+        warnings.setdefault("missing absolute size", collections.Counter())[msg] += 1
         return "full"
 
     if len(absSize) != 2:
-        warnings.setdefault("#abs dims != 2", []).append(msg)
+        warnings.setdefault("#abs dims != 2", collections.Counter())[msg] += 1
         return "full"
 
     absW, absH = absSize
 
-    if not region.startswith("pct:"):
-        warnings.setdefault("not pct dims", []).append(msg)
+    if region.startswith("pct:"):
+        isPct = True
+        region = region[4:]
+    else:
+        isPct = False
+
+    dims = region.split(",")
+
+    if len(dims) != 4:
+        warnings.setdefault("#dims != 4", collections.Counter())[msg] += 1
         return "full"
 
-    pctDims = region[4:].split(",")
+    dimsInt = []
+    dimGood = True
 
-    if len(pctDims) != 4:
-        warnings.setdefault("#pct dims != 4", []).append(msg)
-        return "full"
-
-    pctDimsInt = []
-
-    for x in pctDims:
+    for (dm, x) in zip(("x", "y", "w", "h"), dims):
         if not x.isdecimal():
-            warnings.setdefault("pct dim not int", []).append(msg)
-            return "full"
+            warnings.setdefault(f"{dm}={x} is not a number", collections.Counter())[msg] += 1
+            dimGood = False
+            continue
 
-        pctDimsInt.append(int(x))
+        dimsInt.append(int(x))
 
-    (pctX, pctY, pctW, pctH) = pctDimsInt
+    if not dimGood:
+        return "full"
 
-    pxX = int(round(pctX * absW / 100))
-    pxY = int(round(pctY * absH / 100))
-    pxW = int(round(pctW * absW / 100))
-    pxH = int(round(pctH * absH / 100))
+    if isPct:
+        (pctX, pctY, pctW, pctH) = dimsInt
+
+        pxX = int(round(pctX * absW / 100))
+        pxY = int(round(pctY * absH / 100))
+        pxW = int(round(pctW * absW / 100))
+        pxH = int(round(pctH * absH / 100))
+    else:
+        (pxX, pxY, pxW, pxH) = dimsInt
 
     return f"{pxX},{pxY},{pxW},{pxH}"
 
@@ -1314,7 +1330,6 @@ class WATM:
         excludeFeatures = self.excludeFeatures
         scanInfo = self.scanInfo
         sizeInfo = self.sizeInfo.get("pages", {})
-        silent = self.silent
         pageInfoDir = self.pageInfoDir
         facsMissingFile = f"{pageInfoDir}/facsMissing.tsv"
         facsMissing = set()
@@ -1433,6 +1448,7 @@ class WATM:
                                     F,
                                     L,
                                     sizeInfo,
+                                    facsMissing,
                                     extraFeat,
                                     otype,
                                     n,
@@ -1445,10 +1461,11 @@ class WATM:
                                 if ("pages", page) in facsMissing:
                                     values["page"] = FILE_NOT_FOUND
                                     file = values["file"]
-                                    console(
-                                        f"\t{file}: substituted {FILE_NOT_FOUND} for '{page}'",
-                                        error=True,
-                                    )
+                                    warnings.setdefault(
+                                        f"{otype}:{extraFeat}: "
+                                        f"substituted {FILE_NOT_FOUND}",
+                                        collections.Counter(),
+                                    )[f"{file}: {page}"] += 1
                                 val = value[-1].format(**values)
                         else:
                             val = value.format(**values)
@@ -1457,12 +1474,7 @@ class WATM:
                             KIND_ATTR, NS_TV, f"{extraFeat}={val}", mkSingleTarget(n)
                         )
 
-        for msg, cases in warnings.items():
-            nCases = len(cases)
-            console(f"RUNTIME: {msg} ({nCases}x)", error=True)
-
-            for case in cases[0:5] if silent else cases:
-                console(f"\t{case}", error=True)
+        showWarnings("DATA", warnings)
 
         warnings = None
 
