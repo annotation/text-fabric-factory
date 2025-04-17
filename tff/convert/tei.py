@@ -1049,9 +1049,9 @@ class TEI(CheckImport):
 
         ### `sourceBase`
 
-        *Top-level directory of the TEI-XML sources.*
+        *Parent directory above the TEI-XML sources.*
 
-        By default (if left empty) it is the `tei` directory at the top-level of the
+        By default (if left empty) the `tei` directory is at the top-level of the
         repo, but you can specify any directory you want.
 
         ### `tei`
