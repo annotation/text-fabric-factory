@@ -1422,7 +1422,7 @@ class TEI(CheckImport):
             else:
                 teiVersion = tei
 
-            errMsg = f"source version {teiVersion} does not exists in {ux(teiDir)}"
+            errMsg = f"source version {teiVersion} does not exist in {ux(teiDir)}"
             teiVersionRep = f"/{teiVersion}"
 
         teiPath = f"{teiDir}{teiVersionRep}"
@@ -2055,11 +2055,14 @@ class TEI(CheckImport):
         self.facsKind = {}
         facsNotDeclared = {}
         zoneRegionIncomplete = {}
+        facsNoId = {}
+        self.facsNoId = facsNoId
 
         nPagesNoFacs = 0
 
         inFacsimile = False
         surfaceId = None
+        scanFile = None
         zoneId = None
         zoneRegion = None
 
@@ -2102,6 +2105,7 @@ class TEI(CheckImport):
                 nonlocal nPagesNoFacs
                 nonlocal inFacsimile
                 nonlocal surfaceId
+                nonlocal scanFile
                 nonlocal zoneId
                 nonlocal zoneRegion
 
@@ -2146,41 +2150,65 @@ class TEI(CheckImport):
                     elif inFacsimile:
                         if tag == "surface":
                             surfaceId = atts.get("id", None)
+                            scanFile = None
+
+                            if not surfaceId:
+                                facsNoId[xmlPath]["surface"] += 1
                         elif tag == "zone":
                             zoneId = atts.get("id", None)
-                            zoneRegion = []
 
-                            for a, aDefault in ZONE_ATTS:
-                                aVal = atts.get(a, None)
+                            if zoneId:
+                                zoneRegion = []
 
-                                if aVal is None:
-                                    aVal = aDefault
-                                    zoneRegionIncomplete.setdefault(zoneId, {})[
-                                        a
-                                    ] = f"None => {aDefault}"
-                                elif aVal.isdecimal():
-                                    aVal = int(aVal)
-                                else:
-                                    zoneRegionIncomplete.setdefault(zoneId, {})[
-                                        a
-                                    ] = f"{aVal} => {aDefault}"
+                                for a, aDefault in ZONE_ATTS:
+                                    aVal = atts.get(a, None)
 
-                                zoneRegion.append(aVal)
+                                    if aVal is None:
+                                        aVal = aDefault
+                                        zoneRegionIncomplete.setdefault(zoneId, {})[
+                                            a
+                                        ] = f"None => {aDefault}"
+                                    elif aVal.isdecimal():
+                                        aVal = int(aVal)
+                                    else:
+                                        zoneRegionIncomplete.setdefault(zoneId, {})[
+                                            a
+                                        ] = f"{aVal} => {aDefault}"
 
-                            (ulx, uly, lrx, lry) = zoneRegion
-                            zoneRegion = f"pct:{ulx},{uly},{lrx - ulx},{lry - uly}"
+                                    zoneRegion.append(aVal)
 
-                        elif tag == "graphic":
-                            scanFile = atts.get("url", None)
+                                (ulx, uly, lrx, lry) = zoneRegion
+                                zoneRegion = f"pct:{ulx},{uly},{lrx - ulx},{lry - uly}"
 
-                            if scanFile is not None:
-                                if zoneId:
+                                if scanFile:
                                     facsMapping[xmlPath][zoneId] = [
                                         scanFile,
                                         zoneRegion,
                                     ]
                                     facsKind[xmlPath][zoneId] = "zone"
-                                elif surfaceId:
+                            else:
+                                facsNoId[xmlPath]["zone"] += 1
+
+                        elif tag == "graphic":
+                            # can be inside zone or inside surface
+                            # if inside surface, it holds for all zones without
+                            # own scanFile
+                            thisScanFile = atts.get("url", None)
+
+                            if thisScanFile is not None:
+                                if zoneId:
+                                    facsMapping[xmlPath][zoneId] = [
+                                        thisScanFile,
+                                        zoneRegion,
+                                    ]
+                                    facsKind[xmlPath][zoneId] = "zone"
+                                else:
+                                    # this is a graphic outside the zones
+                                    # we set the surface wide scan file
+                                    # so that subsequent zones without graphic
+                                    # can pick this up
+                                    scanFile = thisScanFile
+                                if surfaceId:
                                     facsMapping[xmlPath][surfaceId] = [scanFile, "full"]
                                     facsKind[xmlPath][surfaceId] = "surface"
 
@@ -2227,6 +2255,7 @@ class TEI(CheckImport):
                     elif inFacsimile:
                         if tag == "surface":
                             surfaceId = None
+                            scanFile = None
                         elif tag == "zone":
                             zoneId = None
 
@@ -2278,6 +2307,29 @@ class TEI(CheckImport):
                         console("No validation performed", error=True)
 
         def writeFacs():
+            infoFile = f"{reportPath}/facsNoId.yml"
+            writeYaml(
+                {
+                    f: {k: n for (k, n) in v.items() if n}
+                    for (f, v) in facsNoId.items()
+                    if len(v)
+                },
+                asFile=infoFile,
+            )
+
+            nSurfaces = sum(x["surface"] for x in facsNoId.values())
+            nZones = sum(x["zone"] for x in facsNoId.values())
+
+            if verbose >= 0:
+                pluralS = "" if nSurfaces == 1 else "s"
+                pluralZ = "" if nZones == 1 else "s"
+
+                if nSurfaces:
+                    console(f"{nSurfaces} surface{pluralS} without id")
+
+                if nZones:
+                    console(f"{nZones} zone{pluralZ} without id")
+
             infoFile = f"{reportPath}/facs.yml"
             nItems = sum(len(x) for x in pageScans.values())
             nUnique = sum(len(set(x)) for x in pageScans.values())
@@ -2323,18 +2375,25 @@ class TEI(CheckImport):
 
             for xmlPath, mapping in facsMapping.items():
                 facsEncountered = set(pageScans[xmlPath])
-                thisFacsNotUsed = []
+                thisFacsNotUsed = {}
 
                 for facs in mapping:
                     if facs not in facsEncountered:
-                        thisFacsNotUsed.append(facs)
+                        kind = facsKind[xmlPath][facs]
+                        thisFacsNotUsed.setdefault(kind, []).append(facs)
 
-                facsNotUsed[xmlPath] = thisFacsNotUsed
+                if len(thisFacsNotUsed):
+                    facsNotUsed[xmlPath] = thisFacsNotUsed
 
             facsProblems = {}
 
             nFacsNotDeclared = sum(len(x) for x in facsNotDeclared.values())
-            nFacsNotUsed = sum(len(x) for x in facsNotUsed.values())
+            nSurfacesNotUsed = sum(
+                len(x.get("surface", [])) for x in facsNotUsed.values()
+            )
+            nZonesNotUsed = sum(
+                len(x.get("zone", [])) for x in facsNotUsed.values()
+            )
 
             if nFacsNotDeclared:
                 plural = "" if nFacsNotDeclared == 1 else "s"
@@ -2345,24 +2404,14 @@ class TEI(CheckImport):
                     if len(x)
                 }
 
-            if nFacsNotUsed:
-                nSurfaces = sum(
-                    sum(1 for y in x if facsKind[xmlPath][y] == "surface")
-                    for (xmlPath, x) in facsNotUsed.items()
-                )
-                nZones = sum(
-                    sum(1 for y in x if facsKind[xmlPath][y] == "zone")
-                    for (xmlPath, x) in facsNotUsed.items()
-                )
-                plural = "" if nFacsNotUsed == 1 else "s"
-                pls = "" if nSurfaces == 1 else "s"
-                plz = "" if nZones == 1 else "s"
-                console(
-                    f"{nFacsNotUsed} unused scan{plural} of which "
-                    f"{nSurfaces} surface{pls} and {nZones} zone{plz}",
-                    error=True,
-                )
-                facsProblems["facsNotUsed"] = facsNotUsed
+            if nSurfacesNotUsed:
+                plural = "" if nSurfacesNotUsed == 1 else "s"
+                console(f"{nSurfacesNotUsed} unused surface{plural}", error=True)
+            if nZonesNotUsed:
+                plural = "" if nZonesNotUsed == 1 else "s"
+                console(f"{nZonesNotUsed} unused zone{plural}", error=True)
+
+            facsProblems["facsNotUsed"] = facsNotUsed
 
             writeYaml(facsProblems, asFile=infoFile)
 
@@ -2776,6 +2825,7 @@ class TEI(CheckImport):
             facsMapping[xmlPath] = {}
             facsKind[xmlPath] = {}
             facsNotDeclared[xmlPath] = set()
+            facsNoId[xmlPath] = collections.Counter()
 
             try:
                 tree = etree.parse(xmlFullPath, parser)
@@ -2817,7 +2867,7 @@ class TEI(CheckImport):
             for xmlFile in self.getXML():
                 xmlFullPath = f"{teiPath}/{xmlFile}"
                 (model, adapt, tpl) = self.getSwitches(xmlFullPath)
-                xmlFilesByModel[model].append(xmlPath)
+                xmlFilesByModel[model].append(xmlFile)
 
         good = True
         severeError = False

@@ -884,6 +884,9 @@ def funcPx(F, L, sizeInfo, facsMissing, feat, otype, node, facsFile, region, war
     if ("pages", facsFile) in facsMissing:
         return "full"
 
+    if region in {"full", "square"}:
+        return region
+
     absSize = sizeInfo.get(facsFile, None)
 
     if absSize is None:
@@ -911,9 +914,11 @@ def funcPx(F, L, sizeInfo, facsMissing, feat, otype, node, facsFile, region, war
     dimsInt = []
     dimGood = True
 
-    for (dm, x) in zip(("x", "y", "w", "h"), dims):
+    for dm, x in zip(("x", "y", "w", "h"), dims):
         if not x.isdecimal():
-            warnings.setdefault(f"{dm}={x} is not a number", collections.Counter())[msg] += 1
+            warnings.setdefault(f"{dm}={x} is not a number", collections.Counter())[
+                msg
+            ] += 1
             dimGood = False
             continue
 
@@ -947,6 +952,7 @@ class WATM:
         skipMeta=False,
         extra={},
         silent=False,
+        withScans=True,
         prod="dev",
         **kwargs,
     ):
@@ -1001,6 +1007,8 @@ class WATM:
 
             This mechanism helps you to ensure that you do not change existing
             versions in the `watm` directory.
+        withScans: boolean, optional True
+            Whether to expect scans in the corpus.
         kwargs: dict
             Addtional parameters passed to the parsing of the IIIF config file
 
@@ -1009,6 +1017,7 @@ class WATM:
         self.nsOrig = nsOrig
         self.extra = extra
         self.silent = silent
+        self.withScans = withScans
         self.prod = prod if prod in {"prod", "dev", "preview"} else "dev"
         self.pageInfoDir = pageInfoDir
         api = app.api
@@ -1045,6 +1054,7 @@ class WATM:
         console(f"Manifestlevel = {manifestLevel}")
         zoneBased = settings.get("zoneBased", False)
         self.zoneBased = zoneBased
+
         iiifSettings = (
             parseIIIF(settings, prod, "scans", locally=locally, **kwargs)
             if settings
@@ -1186,11 +1196,12 @@ class WATM:
 
         self.skipMeta = skipMeta
 
-        imageLocations = getImageLocations(app, prod, silent)
-        scanRefDir = imageLocations.scanRefDir
-        doCovers = imageLocations.doCovers
+        if withScans:
+            imageLocations = getImageLocations(app, prod, silent)
+            scanRefDir = imageLocations.scanRefDir
+            doCovers = imageLocations.doCovers
 
-        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
+            self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
 
     def console(self, msg, **kwargs):
         """Print something to the output.
@@ -1328,8 +1339,14 @@ class WATM:
         inheritFeatures = self.inheritFeatures
         excludeElements = self.excludeElements
         excludeFeatures = self.excludeFeatures
+        withScans = self.withScans
         scanInfo = self.scanInfo
-        sizeInfo = self.sizeInfo.get("pages", {})
+
+        if withScans:
+            sizeInfo = self.sizeInfo.get("pages", {})
+        else:
+            sizeInfo = {}
+
         pageInfoDir = self.pageInfoDir
         facsMissingFile = f"{pageInfoDir}/facsMissing.tsv"
         facsMissing = set()

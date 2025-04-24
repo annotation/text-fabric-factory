@@ -805,7 +805,7 @@ def getImageSizes(scanRefDir, doCovers, silent):
 
         if not fileExists(sizeFile):
             console(f"Size file not found: {sizeFile}", error=True)
-            return
+            continue
 
         with fileOpen(sizeFile) as rh:
             next(rh)
