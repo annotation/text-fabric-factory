@@ -391,6 +391,34 @@ parameters can be set:
 *   `excludeFeatures`: the names of features (nodes or edge) for which no annotations
     will be generated.
 
+*   `excludeToplevelSections`: you can exclude specified top-level sections, and
+    all their contents from the resulting WATM. To specify which sections to exclude,
+    specify them as `feature: value` conditions.
+
+    For example, if you have a corpus with folders named `letters`, `about` and
+    `apparatus`, you can exclude the `about` and `apparatus` folders like so:
+
+    ```
+    excludeToplevelSections:
+        - folder: about
+        - folder: apparatus
+    ```
+
+    It is allowed to use multiple conditions per exclusion, like so
+
+    ```
+    excludeToplevelSections:
+        - folder: about
+          feat2: val2
+          feat3: val3
+        - folder: apparatus
+          feat4: val4
+          feat5: val5
+    ```
+
+    In those cases, all conditions need to be satisfied in order to exclude
+    the top level section.
+
 *   `asTsv`: the text and anno files are written as tsv instead of json.
 
     The text files consist of one token per line.
@@ -466,8 +494,8 @@ I am aware of the following:
     In practice, the meaning of the features in TF are known, and hence the attributes
     in the WATM data, so this is not a blocking problem for now.
 
-*   The `excludeElements` and `excludeFeatures` settings will prevent some TF
-    information from reaching the WATM.
+*   The `excludeElements`, `excludeFeatures`, and `excludeToplevelSections`
+    settings will prevent some TF information from reaching the WATM.
 """
 
 import collections
@@ -1115,6 +1143,14 @@ class WATM:
 
         self.excludeElements = set(cfg.excludeElements or [])
         self.excludeFeatures = set(cfg.excludeFeatures or [])
+        excludeToplevelSections = cfg.excludeToplevelSections or []
+
+        excludeTopIndex = {}
+
+        for i, cond in enumerate(excludeToplevelSections):
+            rep = ", ".join(f"{k}={v}" for (k, v) in sorted(cond.items()))
+            excludeTopIndex[i] = dict(rep=rep, nodes=set())
+
         self.asTsv = cfg.asTsv
 
         self.L = api.L
@@ -1122,6 +1158,10 @@ class WATM:
         self.F = F
         self.E = E
         self.Fs = api.Fs
+        T = api.T
+        sectionTypes = T.sectionTypes
+        toplevelSectionType = sectionTypes[0] if len(sectionTypes) else None
+        self.toplevelSectionType = toplevelSectionType
         self.slotType = self.F.otype.slotType
         self.maxSlot = self.F.otype.maxSlot
         self.maxSlotPlus = self.F.otype.maxSlot + 1
@@ -1145,6 +1185,48 @@ class WATM:
         self.rafterv = F.rafter.v if "rafter" in FAllSet else None
         is_metav = F.is_meta.v if "is_meta" in FAllSet else None
         self.is_metav = is_metav
+
+        excludedToplevelNodes = {}
+        self.excludedToplevelNodes = excludedToplevelNodes
+
+        if len(excludeToplevelSections):
+            Fs = api.Fs
+            sectionTypes = T.sectionTypes
+
+            if toplevelSectionType is not None:
+                toplevelNodes = F.otype.s(toplevelSectionType)
+
+                for s in toplevelNodes:
+                    for i, cond in enumerate(excludeToplevelSections):
+                        satisfies = True
+
+                        for feat, val in cond.items():
+                            if not Fs(feat).v(s) == val:
+                                satisfies = False
+                                break
+
+                        if satisfies:
+                            exInfo = excludeTopIndex[i]
+                            rep = exInfo["rep"]
+                            exInfo["nodes"].add(s)
+            if not silent:
+                console("Top level exclusions:")
+
+            for exInfo in excludeTopIndex.values():
+                rep = exInfo["rep"]
+                nodes = exInfo["nodes"]
+                nNodes = len(nodes)
+                plural = "" if nNodes == 1 else "s"
+
+                if not silent:
+                    console(f"\t{nNodes:>3} node{plural} with {rep}")
+                    for node in nodes:
+                        excludedToplevelNodes[node] = rep
+        else:
+            console("No instructions to exclude toplevel section nodes")
+
+        # the following collects all embedded nodes of excluded top level nodes
+        self.getExcluded()
 
         self.pages = getPageInfo(pageInfoDir, zoneBased, manifestLevel)
 
@@ -1203,6 +1285,44 @@ class WATM:
 
             self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
 
+    def getExcluded(self):
+        silent = self.silent
+        F = self.F
+        L = self.L
+        lu = L.u
+        excludedToplevelNodes = self.excludedToplevelNodes
+        toplevelSectionType = self.toplevelSectionType
+
+        excludedNodes = set()
+        self.excludedNodes = excludedNodes
+
+        if toplevelSectionType is not None and len(excludedToplevelNodes):
+            for n in range(1, F.otype.maxNode + 1):
+                if n in excludedToplevelNodes:
+                    excludedNodes.add(n)
+                else:
+                    sN = lu(n, otype=toplevelSectionType)
+
+                    if sN and sN[0] in excludedToplevelNodes:
+                        excludedNodes.add(n)
+
+        excludedSlotMap = {}
+        self.excludedSlotMap = excludedSlotMap
+
+        eSlot = 0
+
+        for slot in range(1, F.otype.maxSlot + 1):
+            if slot in excludedNodes:
+                continue
+
+            eSlot += 1
+            excludedSlotMap[eSlot] = slot
+
+        if not silent:
+            nExcluded = len(excludedNodes)
+            nAll = F.otype.maxNode
+            console(f"Excluded nodes: {nExcluded} from {nAll} nodes")
+
     def console(self, msg, **kwargs):
         """Print something to the output.
 
@@ -1223,6 +1343,7 @@ class WATM:
         to indices in this list is stored in member `waFromTF`.
         """
         error = self.error
+        silent = self.silent
 
         if error:
             self.console("Cannot run because of an earlier error")
@@ -1233,6 +1354,9 @@ class WATM:
         slotType = self.slotType
         textRepoType = self.textRepoType
         skipMeta = self.skipMeta
+        excludedNodes = self.excludedNodes
+        excludedToplevelNodes = self.excludedToplevelNodes
+        toplevelSectionType = self.toplevelSectionType
 
         emptyv = self.emptyv
         strv = self.strv
@@ -1241,15 +1365,23 @@ class WATM:
         rafterv = self.rafterv
         is_metav = self.is_metav
 
-        texts = []
+        texts = {}
         waFromTF = {}
 
         self.texts = texts
         self.waFromTF = waFromTF
 
         for ti, sNode in enumerate(F.otype.s(textRepoType)):
+            if sNode in excludedNodes:
+                if not silent:
+                    ssNode = L.u(sNode, otype=toplevelSectionType)[0]
+                    rep = excludedToplevelNodes[ssNode]
+                    console(f"Skipping {textRepoType} node {sNode} because {rep}")
+
+                continue
+
             text = []
-            texts.append(text)
+            texts[ti] = text
 
             for s in L.d(sNode, otype=slotType):
                 if skipMeta and is_metav(s):
@@ -1314,8 +1446,11 @@ class WATM:
         The mapping from slots to indices in the list of tokens is now extended
         with the mapping from nodes to corresponding node annotations.
 
-        So member `waFromTF` is now a full mapping from all nodes in TF to
+        So member `waFromTF` is now a full mapping from nodes in TF to
         tokens and/or annotations in WATM.
+
+        It does not contain nodes that have been excluded by toplevel section
+        exclusions.
         """
         error = self.error
 
@@ -1336,11 +1471,14 @@ class WATM:
         nsOrig = self.nsOrig
         skipMeta = self.skipMeta
         extra = self.extra
+        textRepoType = self.textRepoType
         inheritFeatures = self.inheritFeatures
         excludeElements = self.excludeElements
         excludeFeatures = self.excludeFeatures
         withScans = self.withScans
         scanInfo = self.scanInfo
+
+        excludedNodes = self.excludedNodes
 
         if withScans:
             sizeInfo = self.sizeInfo.get("pages", {})
@@ -1387,8 +1525,12 @@ class WATM:
             nodes = F.otype.s(otype)
 
             for n in nodes:
+                if n in excludedNodes:
+                    continue
+
                 ws = eoslots(n)
                 sb, se = (ws[0], ws[-1])
+
                 if len(ws) != se - sb + 1:
                     discontinuousNodes[otype].append(n)
 
@@ -1426,6 +1568,9 @@ class WATM:
                 thisScanInfo = scanInfo[otype]
 
                 for i, n in enumerate(nodes):
+                    if n in excludedNodes:
+                        continue
+
                     for extraFeat, value, variables in thisScanInfo:
                         values = {}
                         valuesOK = True
@@ -1521,13 +1666,25 @@ class WATM:
                 body = parts[1] if isRend else "note"
 
                 for n, val in Fs(feat).items():
-                    if n not in waFromTF or not val or skipMeta and is_metav(n):
+                    if (
+                        n in excludedNodes
+                        or n not in waFromTF
+                        or not val
+                        or skipMeta
+                        and is_metav(n)
+                    ):
                         continue
 
                     self.mkAnno(KIND_FMT, ns, body, mkSingleTarget(n))
             else:
                 for n, val in Fs(feat).items():
-                    if n not in waFromTF or val is None or skipMeta and is_metav(n):
+                    if (
+                        n in excludedNodes
+                        or n not in waFromTF
+                        or val is None
+                        or skipMeta
+                        and is_metav(n)
+                    ):
                         continue
 
                     body = f"{feat}={val}"
@@ -1548,14 +1705,24 @@ class WATM:
                 ns = NS_NONE
 
             for fromNode, toNodes in Es(feat).items():
-                if fromNode not in waFromTF or skipMeta and is_metav(fromNode):
+                if (
+                    fromNode in excludedNodes
+                    or fromNode not in waFromTF
+                    or skipMeta
+                    and is_metav(fromNode)
+                ):
                     continue
 
                 targetFrom = mkSingleTarget(fromNode)
 
                 if type(toNodes) is dict:
                     for toNode, val in toNodes.items():
-                        if toNode not in waFromTF or skipMeta and is_metav(toNode):
+                        if (
+                            toNode in excludedNodes
+                            or toNode not in waFromTF
+                            or skipMeta
+                            and is_metav(toNode)
+                        ):
                             continue
 
                         body = f"{feat}={val}"
@@ -1564,7 +1731,12 @@ class WATM:
                         self.mkAnno(KIND_EDGE, ns, body, target)
                 else:
                     for toNode in toNodes:
-                        if toNode not in waFromTF or skipMeta and is_metav(toNode):
+                        if (
+                            toNode in excludedNodes
+                            or toNode not in waFromTF
+                            or skipMeta
+                            and is_metav(toNode)
+                        ):
                             continue
 
                         targetTo = mkSingleTarget(toNode)
@@ -1573,6 +1745,9 @@ class WATM:
 
         for feat, featData in extra.items():
             for n, value in featData.items():
+                if n in excludedNodes:
+                    continue
+
                 self.mkAnno(KIND_ANNO, NS_TT, f"{feat}={value}", mkSingleTarget(n))
 
         for instruction in inheritFeatures:
@@ -1582,12 +1757,18 @@ class WATM:
             features = instruction.features
 
             for sourceNode in F.otype.s(sourceType):
+                if sourceNode in excludedNodes:
+                    continue
+
                 destNodes = L.d(sourceNode, otype=destinationType)
 
                 for feat in features:
                     value = Fs(feat).v(sourceNode)
 
                     for destNode in destNodes:
+                        if destNode in excludedNodes:
+                            continue
+
                         self.mkAnno(
                             KIND_ATTR,
                             namespace,
@@ -1619,7 +1800,9 @@ class WATM:
         nFarTargets = len(farTargets)
 
         if nFarTargets:
-            self.console(f"WARNING: targets across tier0 items, {nFarTargets}x")
+            self.console(
+                f"WARNING: targets across {textRepoType} items, {nFarTargets}x"
+            )
 
             for otype, ti0, start, ti1, end in farTargets[0:10]:
                 self.console(
@@ -1628,7 +1811,7 @@ class WATM:
             if nFarTargets > 10:
                 self.console(f"... and {nFarTargets - 10} more.")
 
-    def getLogicalPairs(self):
+    def getLogicalPairs(self, waFromTF):
         hyphenation = self.hyphenation
         F = self.F
         L = self.L
@@ -1646,6 +1829,9 @@ class WATM:
         lines = F.otype.s(lineType)
 
         for line in lines:
+            if line not in waFromTF:
+                continue
+
             lastSlot = L.d(line, otype=slotType)[-1]
 
             if strv(lastSlot) == "-" and lastSlot > 1 and lastSlot < maxSlot:
@@ -1689,6 +1875,7 @@ class WATM:
         hyphenation = self.hyphenation
         maxNodePlus = self.maxNodePlus
         maxSlotPlus = self.maxSlotPlus
+        excludedNodes = self.excludedNodes
 
         # text files
 
@@ -1731,13 +1918,14 @@ class WATM:
         cr = ""
         nl = True
 
-        for i, text in enumerate(texts):
+        for ti, text in texts.items():
             j += 1
+
             if j > PROGRESS_LIMIT:
                 cr = "\r"
                 nl = False
 
-            textFile = f"{resultDir}/text-{i}.{ext}"
+            textFile = f"{resultDir}/text-{ti}.{ext}"
             nText = len(text)
             total += nText
 
@@ -1750,7 +1938,7 @@ class WATM:
                     writeJson(dict(_ordered_segments=text), asFile=fh)
 
             self.console(
-                f"{cr}Text file {i:>4}: {nText:>8} segments to {textFile}",
+                f"{cr}Text file {ti:>4}: {nText:>8} segments to {textFile}",
                 newline=nl,
             )
 
@@ -1783,6 +1971,7 @@ class WATM:
             with fileOpen(annoFile, "w") as fh:
                 if asTsv:
                     fh.write("annoid\tkind\tnamespace\tbody\ttarget\n")
+
                     for aId, (kind, namespace, body, target) in thisAnnoStore.items():
                         body = body.replace("\t", "\\t").replace("\n", "\\n")
                         fh.write(f"{aId}\t{kind}\t{namespace}\t{body}\t{target}\n")
@@ -1835,15 +2024,21 @@ class WATM:
         with fileOpen(slotmapFile, "w") as fh:
             fh.write("position\tnode\n")
             for n in range(1, maxSlotPlus):
+                if n in excludedNodes or n not in waFromTF:
+                    continue
+
                 (file, pos) = waFromTF[n]
                 fh.write(f"{file}:{pos}\t{n}\n")
 
         with fileOpen(nodemapFile, "w") as fh:
             fh.write("annotation\tnode\n")
+
             for n in range(maxSlotPlus, maxNodePlus):
-                aId = waFromTF.get(n, None)
-                if aId is not None:
-                    fh.write(f"{aId}\t{n}\n")
+                if n in excludedNodes or n not in waFromTF:
+                    continue
+
+                aId = waFromTF[n]
+                fh.write(f"{aId}\t{n}\n")
 
         self.console(f"Slot mapping written to {slotmapFile}")
         self.console(f"Node mapping written to {nodemapFile}")
@@ -1856,7 +2051,7 @@ class WATM:
             with fileOpen(logicalFile, "w") as fh:
                 fh.write("token1\ttoken2\tstr\n")
 
-                pairs = self.getLogicalPairs()
+                pairs = self.getLogicalPairs(waFromTF)
 
                 for t1, t2, text in pairs:
                     fh.write(f"{t1}\t{t2}\t{text}\n")
@@ -2020,6 +2215,10 @@ class WATM:
         We unpack targets if they contain structured information.
         """
 
+        # determine the set of relevant TF nodes (due to exclusions)
+
+        self.getExcluded()
+
         # collect the files
 
         asTsv = self.asTsv
@@ -2065,13 +2264,16 @@ class WATM:
 
         skipMeta = self.skipMeta
         is_metav = self.is_metav
+        excludedSlotMap = self.excludedSlotMap
 
         waSlotTF = {}
         tokenFiles = []
 
         slot = 1
 
-        for tfl, textFile in enumerate(textFiles):
+        for textFile in textFiles:
+            ti = int(textFile.removeprefix("text-").removesuffix(f".{ext}"))
+
             with fileOpen(f"{resultDir}/{textFile}") as fh:
                 if asTsv:
                     next(fh)
@@ -2089,7 +2291,8 @@ class WATM:
                     while skipMeta and is_metav(slot):
                         slot += 1
 
-                    waSlotTF[slot] = (tfl, offset)
+                    origSlot = excludedSlotMap[slot]
+                    waSlotTF[origSlot] = (ti, offset)
                     slot += 1
 
         self.testTokens = tokenFiles
@@ -2217,7 +2420,7 @@ class WATM:
             )
 
         textWA = "".join("".join(tokens) for tokens in tokenFiles)
-        textTF = "".join("".join(text) for text in texts)
+        textTF = "".join("".join(text) for text in texts.values())
 
         tGood = self.strEqual(textTF, textWA, silent)
 
@@ -2246,6 +2449,8 @@ class WATM:
         annotations = self.testAnnotations
         silent = self.silent
         excludeElements = self.excludeElements
+        # excludedNodes = self.excludedNodes
+        testNodes = self.testNodes
 
         self.console("Testing the elements ...")
 
@@ -2253,6 +2458,10 @@ class WATM:
         nPisTF = 0
 
         for n in range(maxSlotPlus, maxNodePlus):
+            # if n in excludedNodes:
+            if n not in testNodes:
+                continue
+
             nType = fotypev(n)
             isPi = nType.startswith("?")
 
@@ -2268,9 +2477,6 @@ class WATM:
             else:
                 if nType not in excludeElements:
                     nElementsTF += 1
-
-        nElementsWA = 0
-        nPisWA = 0
 
         nodeFromAid = self.nodeFromAid
 
@@ -2300,12 +2506,12 @@ class WATM:
 
         element = 0
         pi = 0
-        other = 0
         goodName = 0
         wrongName = 0
         unmapped = 0
 
-        self.console(f"\t{len(nodeFromAid)} element/pi annotations")
+        nElemPi = sum(1 for x in nodeFromAid if type(x) is str)
+        self.console(f"\t{nElemPi} element/pi annotations")
 
         wrongTargets = []
         allTargets = 0
@@ -2316,7 +2522,6 @@ class WATM:
             isPi = kind == KIND_PI
 
             if not (isElem or isPi):
-                other += 1
                 continue
 
             if isElem:
@@ -2366,7 +2571,6 @@ class WATM:
 
         self.console(f"\tElement      : {element:>6} x")
         self.console(f"\tPi           : {pi:>6} x")
-        self.console(f"\tOther        : {other:>6} x")
         self.console(f"\tGood name    : {goodName:>6} x")
         self.console(f"\tWrong name   : {wrongName:>6} x")
         self.console(f"\tGood target  : {goodTargets:>6} x")
@@ -2715,7 +2919,7 @@ class WATM:
 
         self.console("Testing the edges ...")
 
-        tfFromWAEdges = {}
+        waEdges = {}
 
         for aId, kind, ns, body, target in annotations:
             if kind != KIND_EDGE:
@@ -2726,40 +2930,13 @@ class WATM:
             toNode = nodeFromAid[to]
             parts = body.split("=", 1)
             name, val = (body, None) if len(parts) == 1 else parts
-            tfFromWAEdges.setdefault(name, {}).setdefault(fromNode, {})[toNode] = val
+            waEdges.setdefault(name, {}).setdefault(fromNode, {})[toNode] = val
 
-        if not silent:
-            console(f"\tFound: {len(nodeFromAid)} nodes")
+        tfEdges = {}
 
-            for edge, edgeData in sorted(tfFromWAEdges.items()):
-                console(f"\tFound edge {edge} with {len(edgeData)} starting nodes")
-
-        allGood = True
-
-        for edge in set(Eall()) | set(tfFromWAEdges):
+        for edge in Eall():
             if edge == OSLOTS or edge in excludeFeatures:
                 continue
-
-            self.console(f"\tChecking edge {edge}")
-
-            good = True
-
-            x = f"edge {edge}: " if silent else "\t\t"
-
-            if edge not in set(Eall()):
-                console(f"{x}missing in TF data", error=True)
-                good = False
-
-            if edge not in tfFromWAEdges:
-                console(f"{x}missing in annotation data", error=True)
-                good = False
-
-            if not good:
-                good = False
-                allGood = False
-                continue
-
-            dataTF = {}
 
             for f, ts in Es(edge).items():
                 if f not in testNodes:
@@ -2769,14 +2946,50 @@ class WATM:
                     for t, v in ts.items():
                         if t not in testNodes:
                             continue
-                        dataTF.setdefault(f, {})[t] = v
+
+                        tfEdges.setdefault(edge, {}).setdefault(f, {})[t] = v
                 else:
                     for t in ts:
                         if t not in testNodes:
                             continue
-                        dataTF.setdefault(f, {})[t] = None
 
-            dataWA = tfFromWAEdges[edge]
+                        tfEdges.setdefault(edge, {}).setdefault(f, {})[t] = None
+
+        if not silent:
+            console(f"\tFound: {len(waEdges)} edges in annotations")
+
+            for edge, edgeData in sorted(waEdges.items()):
+                console(f"\t\tedge {edge} with {len(edgeData)} starting nodes")
+
+            console(f"\tFound: {len(tfEdges)} edges in annotations")
+
+            for edge, edgeData in sorted(tfEdges.items()):
+                console(f"\t\tedge {edge} with {len(edgeData)} starting nodes")
+
+        allGood = True
+
+        for edge in set(tfEdges) | set(waEdges):
+            self.console(f"\tChecking edge {edge}")
+
+            good = True
+
+            x = f"edge {edge}: " if silent else "\t\t"
+
+            if edge not in tfEdges:
+                console(f"\t\t{x}missing in TF data", error=True)
+                good = False
+
+            if edge not in waEdges:
+                console(f"\t\t{x}missing in annotation data", error=True)
+                good = False
+
+            if not good:
+                good = False
+                allGood = False
+                continue
+
+            dataTF = tfEdges[edge]
+            dataWA = waEdges[edge]
 
             fromNodesTF = set(dataTF)
             fromNodesWA = set(dataWA)
@@ -2788,7 +3001,7 @@ class WATM:
                 self.console(f"\t\tsame {nFromTF} fromNodes")
             else:
                 console(
-                    f"{x}from nodes differ: {nFromTF} in TF, {nFromWA} in WA",
+                    f"\t\t{x}from nodes differ: {nFromTF} in TF, {nFromWA} in WA",
                     error=True,
                 )
                 good = False
@@ -2811,7 +3024,8 @@ class WATM:
             if len(diffs):
                 good = False
                 console(
-                    f"{x}differences in toNodes for {len(diffs)} fromNodes", error=True
+                    f"\t\t{x}differences in toNodes for {len(diffs)} fromNodes",
+                    error=True,
                 )
 
                 for f, toNodeInfoTF, toNodeInfoWA in sorted(diffs)[0:10]:
@@ -2827,7 +3041,7 @@ class WATM:
                         self.console(f"\t\t\tsame {nToTF} toNodes")
                     else:
                         console(
-                            f"{x}\ttoNodes differ: {nToTF} in TF, {nToWA} in WA",
+                            f"{x}\t\ttoNodes differ: {nToTF} in TF, {nToWA} in WA",
                             error=True,
                         )
                     for t in toNodesTF | toNodesWA:
@@ -2857,7 +3071,9 @@ class WATM:
                                 )
 
             if not good or not silent:
-                console(f"\t{rep(good)} - {nToChecked} toNodes checked", error=not good)
+                console(
+                    f"\t\t{rep(good)} - {nToChecked} toNodes checked", error=not good
+                )
 
             if not good:
                 allGood = False
