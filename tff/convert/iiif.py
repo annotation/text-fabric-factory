@@ -190,6 +190,10 @@ class IIIF:
         prod: string, optional dev
             Whether the manifests are for production (`prod`) or development (`dev`)
             or preview (`preview`)
+            If the value is `preview` we assume that the actual scans are in a IIIF
+            repo, and not within reach of the code here. But we do assume
+            that a sizes file is present in the expected location (in the scanRefDir),
+            and possibly a rotations file.
         locally: whether we are running on a local machine or on a server;
             this is only relevant if `prod == "preview"`. In that case, `locally`
             distinguishes whether we run de preview machinery on a local development
@@ -219,7 +223,6 @@ class IIIF:
 
         locations = getImageLocations(app, prod, silent)
         repoLocation = locations.repoLocation
-        self.scanDir = locations.scanDir
         self.thumbDir = locations.thumbDir
         scanRefDir = locations.scanRefDir
         self.scanRefDir = scanRefDir
@@ -369,6 +372,7 @@ class IIIF:
         if self.error:
             return (0, 0)
 
+        prod = self.prod
         settings = self.settings
         scanRefDir = self.scanRefDir
         ext = settings.get("constants", {}).get("ext", "jpg")
@@ -414,9 +418,11 @@ class IIIF:
             else:
                 region = "full"
 
-            pFile = f"{scanRefDir}/{kind}/{p}.{ext}"
-
-            scanPresent = fileExists(pFile)
+            if prod == "preview":
+                scanPresent = p in sizeInfo
+            else:
+                pFile = f"{scanRefDir}/{kind}/{p}.{ext}"
+                scanPresent = fileExists(pFile)
 
             if scanPresent:
                 w, h = sizeInfo.get(p, (0, 0))
