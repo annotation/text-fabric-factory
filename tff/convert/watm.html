@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.11.1" />
+<meta name="generator" content="pdoc 0.11.6" />
 <title>tff.convert.watm API documentation</title>
 <meta name="description" content="Export to Web Annotation Text Model …" />
 <!-- integrity SRI from https://cdnjs.com/libraries/10up-sanitize.css/11.0.1 -->
@@ -433,6 +433,26 @@ there are no annotations that target non-existing annotations.</p>
 will be generated.</p>
 </li>
 <li>
+<p><code>excludeToplevelSections</code>: you can exclude specified top-level sections, and
+all their contents from the resulting WATM. To specify which sections to exclude,
+specify them as <code>feature: value</code> conditions.</p>
+<p>For example, if you have a corpus with folders named <code>letters</code>, <code>about</code> and
+<code>apparatus</code>, you can exclude the <code>about</code> and <code>apparatus</code> folders like so:</p>
+<p><code>excludeToplevelSections:
+- folder: about
+- folder: apparatus</code></p>
+<p>It is allowed to use multiple conditions per exclusion, like so</p>
+<p><code>excludeToplevelSections:
+- folder: about
+feat2: val2
+feat3: val3
+- folder: apparatus
+feat4: val4
+feat5: val5</code></p>
+<p>In those cases, all conditions need to be satisfied in order to exclude
+the top level section.</p>
+</li>
+<li>
 <p><code>asTsv</code>: the text and anno files are written as tsv instead of json.</p>
 <p>The text files consist of one token per line.
 The newline token is written as <code></code>.</p>
@@ -502,14 +522,14 @@ make a distinction between the integer <code>1</code> and the string <code>"1"</
 in the WATM data, so this is not a blocking problem for now.</p>
 </li>
 <li>
-<p>The <code>excludeElements</code> and <code>excludeFeatures</code> settings will prevent some TF
-information from reaching the WATM.</p>
+<p>The <code>excludeElements</code>, <code>excludeFeatures</code>, and <code>excludeToplevelSections</code>
+settings will prevent some TF information from reaching the WATM.</p>
 </li>
 </ul>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/00b1804a2a0eabefbe45442674c2cdeab9cb62dd/tff/convert/watm.py#L1-L2946" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L1-L3236" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">&#34;&#34;&#34;Export to Web Annotation Text Model
 
@@ -904,6 +924,34 @@ parameters can be set:
 *   `excludeFeatures`: the names of features (nodes or edge) for which no annotations
     will be generated.
 
+*   `excludeToplevelSections`: you can exclude specified top-level sections, and
+    all their contents from the resulting WATM. To specify which sections to exclude,
+    specify them as `feature: value` conditions.
+
+    For example, if you have a corpus with folders named `letters`, `about` and
+    `apparatus`, you can exclude the `about` and `apparatus` folders like so:
+
+    ```
+    excludeToplevelSections:
+        - folder: about
+        - folder: apparatus
+    ```
+
+    It is allowed to use multiple conditions per exclusion, like so
+
+    ```
+    excludeToplevelSections:
+        - folder: about
+          feat2: val2
+          feat3: val3
+        - folder: apparatus
+          feat4: val4
+          feat5: val5
+    ```
+
+    In those cases, all conditions need to be satisfied in order to exclude
+    the top level section.
+
 *   `asTsv`: the text and anno files are written as tsv instead of json.
 
     The text files consist of one token per line.
@@ -979,8 +1027,8 @@ I am aware of the following:
     In practice, the meaning of the features in TF are known, and hence the attributes
     in the WATM data, so this is not a blocking problem for now.
 
-*   The `excludeElements` and `excludeFeatures` settings will prevent some TF
-    information from reaching the WATM.
+*   The `excludeElements`, `excludeFeatures`, and `excludeToplevelSections`
+    settings will prevent some TF information from reaching the WATM.
 &#34;&#34;&#34;
 
 import collections
@@ -1006,7 +1054,13 @@ from tf.parameters import OTYPE, OSLOTS
 from tf.app import use
 
 from ..parameters import URL_TF_DOCS
-from .iiif import parseIIIF, getImageSizes, getImageLocations
+from .iiif import (
+    parseIIIF,
+    getImageSizes,
+    getImageLocations,
+    FILE_NOT_FOUND,
+    # FILE_NOT_FOUND_SIZES,
+)
 from .helpers import getPageInfo
 
 AFTER = &#34;after&#34;
@@ -1293,7 +1347,7 @@ def operationalize(data):
         r&#34;&#34;&#34;
         ^
         ([a-zA-Z][a-zA-Z0-9_]*)
-        :\|
+        :‖
         (.*)
         $
         &#34;&#34;&#34;,
@@ -1343,79 +1397,106 @@ def operationalize(data):
 
                 funcName, args = match.group(1, 2)
 
-                if funcName != &#34;px&#34;:
-                    warnings.setdefault(&#34;unknown function name&#34;, []).append(
+                if funcName not in {&#34;px&#34;, &#34;checkPage&#34;}:
+                    warnings.setdefault(&#34;unknown function name&#34;, collections.Counter())[
                         f&#34;{extraFeat}.{nodeType}: {value}&#34;
-                    )
+                    ] += 1
                     good = False
 
-                args = args.split(&#34;|&#34;)
+                args = args.split(&#34;‖&#34;)
+                nArgs = len(args)
+                requiredArgs = (
+                    2 if funcName == &#34;px&#34; else 2 if funcName == &#34;checkPage&#34; else None
+                )
 
-                if len(args) != 2:
-                    warnings.setdefault(&#34;#args = {nArgs} != 2&#34;, []).append(value)
+                if nArgs != requiredArgs:
+                    warnings.setdefault(
+                        &#34;#args = {nArgs}, should be {requiredArgs}&#34;,
+                        collections.Counter(),
+                    )[value] += 1
 
                 if good:
                     value = (funcName, *args)
 
             scanInfo.setdefault(nodeType, []).append((extraFeat, value, newVars))
 
-    for msg, cases in warnings.items():
-        nCases = len(cases)
-        console(f&#34;CONFIG: {msg} ({nCases}x)&#34;, error=True)
-
-        for case in cases:
-            console(f&#34;\t{case}&#34;, error=True)
-
+    showWarnings(&#34;CONFIG&#34;, warnings)
     return (len(warnings) == 0, scanInfo)
 
 
-def funcPx(F, L, sizeInfo, feat, otype, node, facsFile, region, warnings):
+def showWarnings(label, warnings):
+    if len(warnings):
+        console(f&#34;{label} warnings&#34;)
 
+        for msg, cases in warnings.items():
+            nCases = sum(cases.values())
+            console(f&#34;\t{nCases:&gt;4}x {msg}&#34;, error=True)
+
+            for case, n in cases.items():
+                console(f&#34;\t\t{n:&gt;4}x {case}&#34;, error=True)
+
+
+def funcPx(F, L, sizeInfo, facsMissing, feat, otype, node, facsFile, region, warnings):
     file = F.file.v(L.u(node, otype=&#34;file&#34;)[0])
+
     folder = F.folder.v(L.u(node, otype=&#34;folder&#34;)[0])
-    msg = f&#34;{folder}/{file}: {feat}.{otype}: &#39;{facsFile}&#39; | &#39;{region}&#39;&#34;
+    msg = f&#34;{folder}/{file}: {otype}.{feat}: &#39;{facsFile}&#39; | &#39;{region}&#39;&#34;
+
+    if (&#34;pages&#34;, facsFile) in facsMissing:
+        return &#34;full&#34;
+
+    if region in {&#34;full&#34;, &#34;square&#34;}:
+        return region
 
     absSize = sizeInfo.get(facsFile, None)
 
     if absSize is None:
-        if not facsFile or facsFile == &#34;unknown&#34;:
-            warnings.setdefault(&#34;missing page image&#34;, []).append(msg)
-        else:
-            warnings.setdefault(&#34;missing absolute size&#34;, []).append(msg)
-
+        warnings.setdefault(&#34;missing absolute size&#34;, collections.Counter())[msg] += 1
         return &#34;full&#34;
 
     if len(absSize) != 2:
-        warnings.setdefault(&#34;#abs dims != 2&#34;, []).append(msg)
+        warnings.setdefault(&#34;#abs dims != 2&#34;, collections.Counter())[msg] += 1
         return &#34;full&#34;
 
     absW, absH = absSize
 
-    if not region.startswith(&#34;pct:&#34;):
-        warnings.setdefault(&#34;not pct dims&#34;, []).append(msg)
+    if region.startswith(&#34;pct:&#34;):
+        isPct = True
+        region = region[4:]
+    else:
+        isPct = False
+
+    dims = region.split(&#34;,&#34;)
+
+    if len(dims) != 4:
+        warnings.setdefault(&#34;#dims != 4&#34;, collections.Counter())[msg] += 1
         return &#34;full&#34;
 
-    pctDims = region[4:].split(&#34;,&#34;)
+    dimsInt = []
+    dimGood = True
 
-    if len(pctDims) != 4:
-        warnings.setdefault(&#34;#pct dims != 4&#34;, []).append(msg)
-        return &#34;full&#34;
-
-    pctDimsInt = []
-
-    for x in pctDims:
+    for dm, x in zip((&#34;x&#34;, &#34;y&#34;, &#34;w&#34;, &#34;h&#34;), dims):
         if not x.isdecimal():
-            warnings.setdefault(&#34;pct dim not int&#34;, []).append(msg)
-            return &#34;full&#34;
+            warnings.setdefault(f&#34;{dm}={x} is not a number&#34;, collections.Counter())[
+                msg
+            ] += 1
+            dimGood = False
+            continue
 
-        pctDimsInt.append(int(x))
+        dimsInt.append(int(x))
 
-    (pctX, pctY, pctW, pctH) = pctDimsInt
+    if not dimGood:
+        return &#34;full&#34;
 
-    pxX = int(round(pctX * absW / 100))
-    pxY = int(round(pctY * absH / 100))
-    pxW = int(round(pctW * absW / 100))
-    pxH = int(round(pctH * absH / 100))
+    if isPct:
+        (pctX, pctY, pctW, pctH) = dimsInt
+
+        pxX = int(round(pctX * absW / 100))
+        pxY = int(round(pctY * absH / 100))
+        pxW = int(round(pctW * absW / 100))
+        pxH = int(round(pctH * absH / 100))
+    else:
+        (pxX, pxY, pxW, pxH) = dimsInt
 
     return f&#34;{pxX},{pxY},{pxW},{pxH}&#34;
 
@@ -1427,10 +1508,12 @@ class WATM:
         self,
         app,
         nsOrig,
+        locally=False,
         pageInfoDir=None,
         skipMeta=False,
         extra={},
         silent=False,
+        withScans=True,
         prod=&#34;dev&#34;,
         **kwargs,
     ):
@@ -1449,6 +1532,10 @@ class WATM:
             representation. For example `tei` for a TEI corpus, `pagexml` for a
             PageXML corpus. The namespace is not related to XML namespaces, it is
             merely a device to categorize the resulting annotations.
+        locally: whether we are running on a local machine or on a server;
+            this is only relevant if `prod == &#34;preview&#34;`. In that case, `locally`
+            distinguishes whether we run de preview machinery on a local development
+            computer, or on a server within public-facing infrastructure
         pageInfoDir: string, optional None
             If supplied, extra page information will be looked up from files in this
             directory.
@@ -1481,6 +1568,8 @@ class WATM:
 
             This mechanism helps you to ensure that you do not change existing
             versions in the `watm` directory.
+        withScans: boolean, optional True
+            Whether to expect scans in the corpus.
         kwargs: dict
             Addtional parameters passed to the parsing of the IIIF config file
 
@@ -1489,7 +1578,9 @@ class WATM:
         self.nsOrig = nsOrig
         self.extra = extra
         self.silent = silent
+        self.withScans = withScans
         self.prod = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;} else &#34;dev&#34;
+        self.pageInfoDir = pageInfoDir
         api = app.api
         F = api.F
         E = api.E
@@ -1520,9 +1611,16 @@ class WATM:
 
         self.error = False
 
+        manifestLevel = settings.get(&#34;manifestLevel&#34;, &#34;folder&#34;)
+        console(f&#34;Manifestlevel = {manifestLevel}&#34;)
         zoneBased = settings.get(&#34;zoneBased&#34;, False)
         self.zoneBased = zoneBased
-        iiifSettings = parseIIIF(settings, prod, &#34;scans&#34;, **kwargs) if settings else {}
+
+        iiifSettings = (
+            parseIIIF(settings, prod, &#34;scans&#34;, locally=locally, **kwargs)
+            if settings
+            else {}
+        )
         (good, self.scanInfo) = operationalize(iiifSettings)
 
         if not good:
@@ -1578,6 +1676,14 @@ class WATM:
 
         self.excludeElements = set(cfg.excludeElements or [])
         self.excludeFeatures = set(cfg.excludeFeatures or [])
+        excludeToplevelSections = cfg.excludeToplevelSections or []
+
+        excludeTopIndex = {}
+
+        for i, cond in enumerate(excludeToplevelSections):
+            rep = &#34;, &#34;.join(f&#34;{k}={v}&#34; for (k, v) in sorted(cond.items()))
+            excludeTopIndex[i] = dict(rep=rep, nodes=set())
+
         self.asTsv = cfg.asTsv
 
         self.L = api.L
@@ -1585,6 +1691,10 @@ class WATM:
         self.F = F
         self.E = E
         self.Fs = api.Fs
+        T = api.T
+        sectionTypes = T.sectionTypes
+        toplevelSectionType = sectionTypes[0] if len(sectionTypes) else None
+        self.toplevelSectionType = toplevelSectionType
         self.slotType = self.F.otype.slotType
         self.maxSlot = self.F.otype.maxSlot
         self.maxSlotPlus = self.F.otype.maxSlot + 1
@@ -1609,8 +1719,49 @@ class WATM:
         is_metav = F.is_meta.v if &#34;is_meta&#34; in FAllSet else None
         self.is_metav = is_metav
 
-        folders = [F.folder.v(f) for f in F.otype.s(&#34;folder&#34;)]
-        self.pages = getPageInfo(pageInfoDir, zoneBased, folders)
+        excludedToplevelNodes = {}
+        self.excludedToplevelNodes = excludedToplevelNodes
+
+        if len(excludeToplevelSections):
+            Fs = api.Fs
+            sectionTypes = T.sectionTypes
+
+            if toplevelSectionType is not None:
+                toplevelNodes = F.otype.s(toplevelSectionType)
+
+                for s in toplevelNodes:
+                    for i, cond in enumerate(excludeToplevelSections):
+                        satisfies = True
+
+                        for feat, val in cond.items():
+                            if not Fs(feat).v(s) == val:
+                                satisfies = False
+                                break
+
+                        if satisfies:
+                            exInfo = excludeTopIndex[i]
+                            rep = exInfo[&#34;rep&#34;]
+                            exInfo[&#34;nodes&#34;].add(s)
+            if not silent:
+                console(&#34;Top level exclusions:&#34;)
+
+            for exInfo in excludeTopIndex.values():
+                rep = exInfo[&#34;rep&#34;]
+                nodes = exInfo[&#34;nodes&#34;]
+                nNodes = len(nodes)
+                plural = &#34;&#34; if nNodes == 1 else &#34;s&#34;
+
+                if not silent:
+                    console(f&#34;\t{nNodes:&gt;3} node{plural} with {rep}&#34;)
+                    for node in nodes:
+                        excludedToplevelNodes[node] = rep
+        else:
+            console(&#34;No instructions to exclude toplevel section nodes&#34;)
+
+        # the following collects all embedded nodes of excluded top level nodes
+        self.getExcluded()
+
+        self.pages = getPageInfo(pageInfoDir, zoneBased, manifestLevel)
 
         inheritFeatures = cfg.inheritFeatures or []
         self.inheritFeatures = inheritFeatures
@@ -1660,11 +1811,50 @@ class WATM:
 
         self.skipMeta = skipMeta
 
-        imageLocations = getImageLocations(app, prod, silent)
-        scanRefDir = imageLocations.scanRefDir
-        doCovers = imageLocations.doCovers
+        if withScans:
+            imageLocations = getImageLocations(app, prod, silent)
+            scanRefDir = imageLocations.scanRefDir
+            doCovers = imageLocations.doCovers
 
-        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
+            self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
+
+    def getExcluded(self):
+        silent = self.silent
+        F = self.F
+        L = self.L
+        lu = L.u
+        excludedToplevelNodes = self.excludedToplevelNodes
+        toplevelSectionType = self.toplevelSectionType
+
+        excludedNodes = set()
+        self.excludedNodes = excludedNodes
+
+        if toplevelSectionType is not None and len(excludedToplevelNodes):
+            for n in range(1, F.otype.maxNode + 1):
+                if n in excludedToplevelNodes:
+                    excludedNodes.add(n)
+                else:
+                    sN = lu(n, otype=toplevelSectionType)
+
+                    if sN and sN[0] in excludedToplevelNodes:
+                        excludedNodes.add(n)
+
+        excludedSlotMap = {}
+        self.excludedSlotMap = excludedSlotMap
+
+        eSlot = 0
+
+        for slot in range(1, F.otype.maxSlot + 1):
+            if slot in excludedNodes:
+                continue
+
+            eSlot += 1
+            excludedSlotMap[eSlot] = slot
+
+        if not silent:
+            nExcluded = len(excludedNodes)
+            nAll = F.otype.maxNode
+            console(f&#34;Excluded nodes: {nExcluded} from {nAll} nodes&#34;)
 
     def console(self, msg, **kwargs):
         &#34;&#34;&#34;Print something to the output.
@@ -1686,6 +1876,7 @@ class WATM:
         to indices in this list is stored in member `waFromTF`.
         &#34;&#34;&#34;
         error = self.error
+        silent = self.silent
 
         if error:
             self.console(&#34;Cannot run because of an earlier error&#34;)
@@ -1696,6 +1887,9 @@ class WATM:
         slotType = self.slotType
         textRepoType = self.textRepoType
         skipMeta = self.skipMeta
+        excludedNodes = self.excludedNodes
+        excludedToplevelNodes = self.excludedToplevelNodes
+        toplevelSectionType = self.toplevelSectionType
 
         emptyv = self.emptyv
         strv = self.strv
@@ -1704,15 +1898,23 @@ class WATM:
         rafterv = self.rafterv
         is_metav = self.is_metav
 
-        texts = []
+        texts = {}
         waFromTF = {}
 
         self.texts = texts
         self.waFromTF = waFromTF
 
         for ti, sNode in enumerate(F.otype.s(textRepoType)):
+            if sNode in excludedNodes:
+                if not silent:
+                    ssNode = L.u(sNode, otype=toplevelSectionType)[0]
+                    rep = excludedToplevelNodes[ssNode]
+                    console(f&#34;Skipping {textRepoType} node {sNode} because {rep}&#34;)
+
+                continue
+
             text = []
-            texts.append(text)
+            texts[ti] = text
 
             for s in L.d(sNode, otype=slotType):
                 if skipMeta and is_metav(s):
@@ -1777,8 +1979,11 @@ class WATM:
         The mapping from slots to indices in the list of tokens is now extended
         with the mapping from nodes to corresponding node annotations.
 
-        So member `waFromTF` is now a full mapping from all nodes in TF to
+        So member `waFromTF` is now a full mapping from nodes in TF to
         tokens and/or annotations in WATM.
+
+        It does not contain nodes that have been excluded by toplevel section
+        exclusions.
         &#34;&#34;&#34;
         error = self.error
 
@@ -1799,12 +2004,31 @@ class WATM:
         nsOrig = self.nsOrig
         skipMeta = self.skipMeta
         extra = self.extra
+        textRepoType = self.textRepoType
         inheritFeatures = self.inheritFeatures
         excludeElements = self.excludeElements
         excludeFeatures = self.excludeFeatures
+        withScans = self.withScans
         scanInfo = self.scanInfo
-        sizeInfo = self.sizeInfo.get(&#34;pages&#34;, {})
-        silent = self.silent
+
+        excludedNodes = self.excludedNodes
+
+        if withScans:
+            sizeInfo = self.sizeInfo.get(&#34;pages&#34;, {})
+        else:
+            sizeInfo = {}
+
+        pageInfoDir = self.pageInfoDir
+        facsMissingFile = f&#34;{pageInfoDir}/facsMissing.tsv&#34;
+        facsMissing = set()
+
+        if fileExists(facsMissingFile):
+            with fileOpen(facsMissingFile) as fh:
+                next(fh)
+
+                for line in fh:
+                    (kind, file, page, n) = line.rstrip(&#34;\n&#34;).split(&#34;\t&#34;)
+                    facsMissing.add((kind, page))
 
         waFromTF = self.waFromTF
 
@@ -1834,8 +2058,12 @@ class WATM:
             nodes = F.otype.s(otype)
 
             for n in nodes:
+                if n in excludedNodes:
+                    continue
+
                 ws = eoslots(n)
                 sb, se = (ws[0], ws[-1])
+
                 if len(ws) != se - sb + 1:
                     discontinuousNodes[otype].append(n)
 
@@ -1873,6 +2101,9 @@ class WATM:
                 thisScanInfo = scanInfo[otype]
 
                 for i, n in enumerate(nodes):
+                    if n in excludedNodes:
+                        continue
+
                     for extraFeat, value, variables in thisScanInfo:
                         values = {}
                         valuesOK = True
@@ -1912,12 +2143,25 @@ class WATM:
                                     F,
                                     L,
                                     sizeInfo,
+                                    facsMissing,
                                     extraFeat,
                                     otype,
                                     n,
                                     *[v.format(**values) for v in value[1:]],
                                     warnings,
                                 )
+                            elif value[0] == &#34;checkPage&#34;:
+                                page = values[&#34;page&#34;]
+
+                                if (&#34;pages&#34;, page) in facsMissing:
+                                    values[&#34;page&#34;] = FILE_NOT_FOUND
+                                    file = values[&#34;file&#34;]
+                                    warnings.setdefault(
+                                        f&#34;{otype}:{extraFeat}: &#34;
+                                        f&#34;substituted {FILE_NOT_FOUND}&#34;,
+                                        collections.Counter(),
+                                    )[f&#34;{file}: {page}&#34;] += 1
+                                val = value[-1].format(**values)
                         else:
                             val = value.format(**values)
 
@@ -1925,12 +2169,7 @@ class WATM:
                             KIND_ATTR, NS_TV, f&#34;{extraFeat}={val}&#34;, mkSingleTarget(n)
                         )
 
-        for msg, cases in warnings.items():
-            nCases = len(cases)
-            console(f&#34;RUNTIME: {msg} ({nCases}x)&#34;, error=True)
-
-            for case in (cases[0:5] if silent else cases):
-                console(f&#34;\t{case}&#34;, error=True)
+        showWarnings(&#34;DATA&#34;, warnings)
 
         warnings = None
 
@@ -1952,7 +2191,7 @@ class WATM:
             isNote = False
 
             if isTei:
-                parts = feat.split(&#34;_&#34;, 2)
+                parts = feat.split(&#34;_&#34;, 1)
                 isRend = len(parts) &gt;= 2 and parts[0] == &#34;rend&#34;
                 isNote = len(parts) == 2 and parts[0] == &#34;is&#34; and parts[1] == &#34;note&#34;
 
@@ -1960,13 +2199,25 @@ class WATM:
                 body = parts[1] if isRend else &#34;note&#34;
 
                 for n, val in Fs(feat).items():
-                    if n not in waFromTF or not val or skipMeta and is_metav(n):
+                    if (
+                        n in excludedNodes
+                        or n not in waFromTF
+                        or not val
+                        or skipMeta
+                        and is_metav(n)
+                    ):
                         continue
 
                     self.mkAnno(KIND_FMT, ns, body, mkSingleTarget(n))
             else:
                 for n, val in Fs(feat).items():
-                    if n not in waFromTF or val is None or skipMeta and is_metav(n):
+                    if (
+                        n in excludedNodes
+                        or n not in waFromTF
+                        or val is None
+                        or skipMeta
+                        and is_metav(n)
+                    ):
                         continue
 
                     body = f&#34;{feat}={val}&#34;
@@ -1987,14 +2238,24 @@ class WATM:
                 ns = NS_NONE
 
             for fromNode, toNodes in Es(feat).items():
-                if fromNode not in waFromTF or skipMeta and is_metav(fromNode):
+                if (
+                    fromNode in excludedNodes
+                    or fromNode not in waFromTF
+                    or skipMeta
+                    and is_metav(fromNode)
+                ):
                     continue
 
                 targetFrom = mkSingleTarget(fromNode)
 
                 if type(toNodes) is dict:
                     for toNode, val in toNodes.items():
-                        if toNode not in waFromTF or skipMeta and is_metav(toNode):
+                        if (
+                            toNode in excludedNodes
+                            or toNode not in waFromTF
+                            or skipMeta
+                            and is_metav(toNode)
+                        ):
                             continue
 
                         body = f&#34;{feat}={val}&#34;
@@ -2003,7 +2264,12 @@ class WATM:
                         self.mkAnno(KIND_EDGE, ns, body, target)
                 else:
                     for toNode in toNodes:
-                        if toNode not in waFromTF or skipMeta and is_metav(toNode):
+                        if (
+                            toNode in excludedNodes
+                            or toNode not in waFromTF
+                            or skipMeta
+                            and is_metav(toNode)
+                        ):
                             continue
 
                         targetTo = mkSingleTarget(toNode)
@@ -2012,6 +2278,9 @@ class WATM:
 
         for feat, featData in extra.items():
             for n, value in featData.items():
+                if n in excludedNodes:
+                    continue
+
                 self.mkAnno(KIND_ANNO, NS_TT, f&#34;{feat}={value}&#34;, mkSingleTarget(n))
 
         for instruction in inheritFeatures:
@@ -2021,12 +2290,18 @@ class WATM:
             features = instruction.features
 
             for sourceNode in F.otype.s(sourceType):
+                if sourceNode in excludedNodes:
+                    continue
+
                 destNodes = L.d(sourceNode, otype=destinationType)
 
                 for feat in features:
                     value = Fs(feat).v(sourceNode)
 
                     for destNode in destNodes:
+                        if destNode in excludedNodes:
+                            continue
+
                         self.mkAnno(
                             KIND_ATTR,
                             namespace,
@@ -2058,7 +2333,9 @@ class WATM:
         nFarTargets = len(farTargets)
 
         if nFarTargets:
-            self.console(f&#34;WARNING: targets across tier0 items, {nFarTargets}x&#34;)
+            self.console(
+                f&#34;WARNING: targets across {textRepoType} items, {nFarTargets}x&#34;
+            )
 
             for otype, ti0, start, ti1, end in farTargets[0:10]:
                 self.console(
@@ -2067,7 +2344,7 @@ class WATM:
             if nFarTargets &gt; 10:
                 self.console(f&#34;... and {nFarTargets - 10} more.&#34;)
 
-    def getLogicalPairs(self):
+    def getLogicalPairs(self, waFromTF):
         hyphenation = self.hyphenation
         F = self.F
         L = self.L
@@ -2085,6 +2362,9 @@ class WATM:
         lines = F.otype.s(lineType)
 
         for line in lines:
+            if line not in waFromTF:
+                continue
+
             lastSlot = L.d(line, otype=slotType)[-1]
 
             if strv(lastSlot) == &#34;-&#34; and lastSlot &gt; 1 and lastSlot &lt; maxSlot:
@@ -2128,6 +2408,7 @@ class WATM:
         hyphenation = self.hyphenation
         maxNodePlus = self.maxNodePlus
         maxSlotPlus = self.maxSlotPlus
+        excludedNodes = self.excludedNodes
 
         # text files
 
@@ -2170,13 +2451,14 @@ class WATM:
         cr = &#34;&#34;
         nl = True
 
-        for i, text in enumerate(texts):
+        for ti, text in texts.items():
             j += 1
+
             if j &gt; PROGRESS_LIMIT:
                 cr = &#34;\r&#34;
                 nl = False
 
-            textFile = f&#34;{resultDir}/text-{i}.{ext}&#34;
+            textFile = f&#34;{resultDir}/text-{ti}.{ext}&#34;
             nText = len(text)
             total += nText
 
@@ -2189,7 +2471,7 @@ class WATM:
                     writeJson(dict(_ordered_segments=text), asFile=fh)
 
             self.console(
-                f&#34;{cr}Text file {i:&gt;4}: {nText:&gt;8} segments to {textFile}&#34;,
+                f&#34;{cr}Text file {ti:&gt;4}: {nText:&gt;8} segments to {textFile}&#34;,
                 newline=nl,
             )
 
@@ -2222,6 +2504,7 @@ class WATM:
             with fileOpen(annoFile, &#34;w&#34;) as fh:
                 if asTsv:
                     fh.write(&#34;annoid\tkind\tnamespace\tbody\ttarget\n&#34;)
+
                     for aId, (kind, namespace, body, target) in thisAnnoStore.items():
                         body = body.replace(&#34;\t&#34;, &#34;\\t&#34;).replace(&#34;\n&#34;, &#34;\\n&#34;)
                         fh.write(f&#34;{aId}\t{kind}\t{namespace}\t{body}\t{target}\n&#34;)
@@ -2274,15 +2557,21 @@ class WATM:
         with fileOpen(slotmapFile, &#34;w&#34;) as fh:
             fh.write(&#34;position\tnode\n&#34;)
             for n in range(1, maxSlotPlus):
+                if n in excludedNodes or n not in waFromTF:
+                    continue
+
                 (file, pos) = waFromTF[n]
                 fh.write(f&#34;{file}:{pos}\t{n}\n&#34;)
 
         with fileOpen(nodemapFile, &#34;w&#34;) as fh:
             fh.write(&#34;annotation\tnode\n&#34;)
+
             for n in range(maxSlotPlus, maxNodePlus):
-                aId = waFromTF.get(n, None)
-                if aId is not None:
-                    fh.write(f&#34;{aId}\t{n}\n&#34;)
+                if n in excludedNodes or n not in waFromTF:
+                    continue
+
+                aId = waFromTF[n]
+                fh.write(f&#34;{aId}\t{n}\n&#34;)
 
         self.console(f&#34;Slot mapping written to {slotmapFile}&#34;)
         self.console(f&#34;Node mapping written to {nodemapFile}&#34;)
@@ -2295,7 +2584,7 @@ class WATM:
             with fileOpen(logicalFile, &#34;w&#34;) as fh:
                 fh.write(&#34;token1\ttoken2\tstr\n&#34;)
 
-                pairs = self.getLogicalPairs()
+                pairs = self.getLogicalPairs(waFromTF)
 
                 for t1, t2, text in pairs:
                     fh.write(f&#34;{t1}\t{t2}\t{text}\n&#34;)
@@ -2459,6 +2748,10 @@ class WATM:
         We unpack targets if they contain structured information.
         &#34;&#34;&#34;
 
+        # determine the set of relevant TF nodes (due to exclusions)
+
+        self.getExcluded()
+
         # collect the files
 
         asTsv = self.asTsv
@@ -2504,13 +2797,16 @@ class WATM:
 
         skipMeta = self.skipMeta
         is_metav = self.is_metav
+        excludedSlotMap = self.excludedSlotMap
 
         waSlotTF = {}
         tokenFiles = []
 
         slot = 1
 
-        for tfl, textFile in enumerate(textFiles):
+        for textFile in textFiles:
+            ti = int(textFile.removeprefix(&#34;text-&#34;).removesuffix(f&#34;.{ext}&#34;))
+
             with fileOpen(f&#34;{resultDir}/{textFile}&#34;) as fh:
                 if asTsv:
                     next(fh)
@@ -2528,7 +2824,8 @@ class WATM:
                     while skipMeta and is_metav(slot):
                         slot += 1
 
-                    waSlotTF[slot] = (tfl, offset)
+                    origSlot = excludedSlotMap[slot]
+                    waSlotTF[origSlot] = (ti, offset)
                     slot += 1
 
         self.testTokens = tokenFiles
@@ -2656,7 +2953,7 @@ class WATM:
             )
 
         textWA = &#34;&#34;.join(&#34;&#34;.join(tokens) for tokens in tokenFiles)
-        textTF = &#34;&#34;.join(&#34;&#34;.join(text) for text in texts)
+        textTF = &#34;&#34;.join(&#34;&#34;.join(text) for text in texts.values())
 
         tGood = self.strEqual(textTF, textWA, silent)
 
@@ -2685,6 +2982,8 @@ class WATM:
         annotations = self.testAnnotations
         silent = self.silent
         excludeElements = self.excludeElements
+        # excludedNodes = self.excludedNodes
+        testNodes = self.testNodes
 
         self.console(&#34;Testing the elements ...&#34;)
 
@@ -2692,6 +2991,10 @@ class WATM:
         nPisTF = 0
 
         for n in range(maxSlotPlus, maxNodePlus):
+            # if n in excludedNodes:
+            if n not in testNodes:
+                continue
+
             nType = fotypev(n)
             isPi = nType.startswith(&#34;?&#34;)
 
@@ -2707,9 +3010,6 @@ class WATM:
             else:
                 if nType not in excludeElements:
                     nElementsTF += 1
-
-        nElementsWA = 0
-        nPisWA = 0
 
         nodeFromAid = self.nodeFromAid
 
@@ -2739,12 +3039,12 @@ class WATM:
 
         element = 0
         pi = 0
-        other = 0
         goodName = 0
         wrongName = 0
         unmapped = 0
 
-        self.console(f&#34;\t{len(nodeFromAid)} element/pi annotations&#34;)
+        nElemPi = sum(1 for x in nodeFromAid if type(x) is str)
+        self.console(f&#34;\t{nElemPi} element/pi annotations&#34;)
 
         wrongTargets = []
         allTargets = 0
@@ -2755,7 +3055,6 @@ class WATM:
             isPi = kind == KIND_PI
 
             if not (isElem or isPi):
-                other += 1
                 continue
 
             if isElem:
@@ -2805,7 +3104,6 @@ class WATM:
 
         self.console(f&#34;\tElement      : {element:&gt;6} x&#34;)
         self.console(f&#34;\tPi           : {pi:&gt;6} x&#34;)
-        self.console(f&#34;\tOther        : {other:&gt;6} x&#34;)
         self.console(f&#34;\tGood name    : {goodName:&gt;6} x&#34;)
         self.console(f&#34;\tWrong name   : {wrongName:&gt;6} x&#34;)
         self.console(f&#34;\tGood target  : {goodTargets:&gt;6} x&#34;)
@@ -3016,7 +3314,7 @@ class WATM:
             if not feat.startswith(&#34;rend_&#34;):
                 continue
 
-            value = feat.split(&#34;_&#34;, 2)[1]
+            value = feat.split(&#34;_&#34;, 1)[1]
             if value == &#34;note&#34;:
                 continue
 
@@ -3154,7 +3452,7 @@ class WATM:
 
         self.console(&#34;Testing the edges ...&#34;)
 
-        tfFromWAEdges = {}
+        waEdges = {}
 
         for aId, kind, ns, body, target in annotations:
             if kind != KIND_EDGE:
@@ -3165,40 +3463,13 @@ class WATM:
             toNode = nodeFromAid[to]
             parts = body.split(&#34;=&#34;, 1)
             name, val = (body, None) if len(parts) == 1 else parts
-            tfFromWAEdges.setdefault(name, {}).setdefault(fromNode, {})[toNode] = val
+            waEdges.setdefault(name, {}).setdefault(fromNode, {})[toNode] = val
 
-        if not silent:
-            console(f&#34;\tFound: {len(nodeFromAid)} nodes&#34;)
+        tfEdges = {}
 
-            for edge, edgeData in sorted(tfFromWAEdges.items()):
-                console(f&#34;\tFound edge {edge} with {len(edgeData)} starting nodes&#34;)
-
-        allGood = True
-
-        for edge in set(Eall()) | set(tfFromWAEdges):
+        for edge in Eall():
             if edge == OSLOTS or edge in excludeFeatures:
                 continue
-
-            self.console(f&#34;\tChecking edge {edge}&#34;)
-
-            good = True
-
-            x = f&#34;edge {edge}: &#34; if silent else &#34;\t\t&#34;
-
-            if edge not in set(Eall()):
-                console(f&#34;{x}missing in TF data&#34;, error=True)
-                good = False
-
-            if edge not in tfFromWAEdges:
-                console(f&#34;{x}missing in annotation data&#34;, error=True)
-                good = False
-
-            if not good:
-                good = False
-                allGood = False
-                continue
-
-            dataTF = {}
 
             for f, ts in Es(edge).items():
                 if f not in testNodes:
@@ -3208,14 +3479,50 @@ class WATM:
                     for t, v in ts.items():
                         if t not in testNodes:
                             continue
-                        dataTF.setdefault(f, {})[t] = v
+
+                        tfEdges.setdefault(edge, {}).setdefault(f, {})[t] = v
                 else:
                     for t in ts:
                         if t not in testNodes:
                             continue
-                        dataTF.setdefault(f, {})[t] = None
 
-            dataWA = tfFromWAEdges[edge]
+                        tfEdges.setdefault(edge, {}).setdefault(f, {})[t] = None
+
+        if not silent:
+            console(f&#34;\tFound: {len(waEdges)} edges in annotations&#34;)
+
+            for edge, edgeData in sorted(waEdges.items()):
+                console(f&#34;\t\tedge {edge} with {len(edgeData)} starting nodes&#34;)
+
+            console(f&#34;\tFound: {len(tfEdges)} edges in annotations&#34;)
+
+            for edge, edgeData in sorted(tfEdges.items()):
+                console(f&#34;\t\tedge {edge} with {len(edgeData)} starting nodes&#34;)
+
+        allGood = True
+
+        for edge in set(tfEdges) | set(waEdges):
+            self.console(f&#34;\tChecking edge {edge}&#34;)
+
+            good = True
+
+            x = f&#34;edge {edge}: &#34; if silent else &#34;\t\t&#34;
+
+            if edge not in tfEdges:
+                console(f&#34;\t\t{x}missing in TF data&#34;, error=True)
+                good = False
+
+            if edge not in waEdges:
+                console(f&#34;\t\t{x}missing in annotation data&#34;, error=True)
+                good = False
+
+            if not good:
+                good = False
+                allGood = False
+                continue
+
+            dataTF = tfEdges[edge]
+            dataWA = waEdges[edge]
 
             fromNodesTF = set(dataTF)
             fromNodesWA = set(dataWA)
@@ -3227,7 +3534,7 @@ class WATM:
                 self.console(f&#34;\t\tsame {nFromTF} fromNodes&#34;)
             else:
                 console(
-                    f&#34;{x}from nodes differ: {nFromTF} in TF, {nFromWA} in WA&#34;,
+                    f&#34;\t\t{x}from nodes differ: {nFromTF} in TF, {nFromWA} in WA&#34;,
                     error=True,
                 )
                 good = False
@@ -3250,7 +3557,8 @@ class WATM:
             if len(diffs):
                 good = False
                 console(
-                    f&#34;{x}differences in toNodes for {len(diffs)} fromNodes&#34;, error=True
+                    f&#34;\t\t{x}differences in toNodes for {len(diffs)} fromNodes&#34;,
+                    error=True,
                 )
 
                 for f, toNodeInfoTF, toNodeInfoWA in sorted(diffs)[0:10]:
@@ -3266,7 +3574,7 @@ class WATM:
                         self.console(f&#34;\t\t\tsame {nToTF} toNodes&#34;)
                     else:
                         console(
-                            f&#34;{x}\ttoNodes differ: {nToTF} in TF, {nToWA} in WA&#34;,
+                            f&#34;{x}\t\ttoNodes differ: {nToTF} in TF, {nToWA} in WA&#34;,
                             error=True,
                         )
                     for t in toNodesTF | toNodesWA:
@@ -3296,7 +3604,9 @@ class WATM:
                                 )
 
             if not good or not silent:
-                console(f&#34;\t{rep(good)} - {nToChecked} toNodes checked&#34;, error=not good)
+                console(
+                    f&#34;\t\t{rep(good)} - {nToChecked} toNodes checked&#34;, error=not good
+                )
 
             if not good:
                 allGood = False
@@ -3467,10 +3777,79 @@ class WATMS:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="tff.convert.watm.funcPx"><code class="name flex">
-<span>def <span class="ident">funcPx</span></span>(<span>F, L, sizeInfo, feat, otype, node, facsFile, region, warnings)</span>
+<span>def <span class="ident">funcPx</span></span>(<span>F, L, sizeInfo, facsMissing, feat, otype, node, facsFile, region, warnings)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L906-L968" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def funcPx(F, L, sizeInfo, facsMissing, feat, otype, node, facsFile, region, warnings):
+    file = F.file.v(L.u(node, otype=&#34;file&#34;)[0])
+
+    folder = F.folder.v(L.u(node, otype=&#34;folder&#34;)[0])
+    msg = f&#34;{folder}/{file}: {otype}.{feat}: &#39;{facsFile}&#39; | &#39;{region}&#39;&#34;
+
+    if (&#34;pages&#34;, facsFile) in facsMissing:
+        return &#34;full&#34;
+
+    if region in {&#34;full&#34;, &#34;square&#34;}:
+        return region
+
+    absSize = sizeInfo.get(facsFile, None)
+
+    if absSize is None:
+        warnings.setdefault(&#34;missing absolute size&#34;, collections.Counter())[msg] += 1
+        return &#34;full&#34;
+
+    if len(absSize) != 2:
+        warnings.setdefault(&#34;#abs dims != 2&#34;, collections.Counter())[msg] += 1
+        return &#34;full&#34;
+
+    absW, absH = absSize
+
+    if region.startswith(&#34;pct:&#34;):
+        isPct = True
+        region = region[4:]
+    else:
+        isPct = False
+
+    dims = region.split(&#34;,&#34;)
+
+    if len(dims) != 4:
+        warnings.setdefault(&#34;#dims != 4&#34;, collections.Counter())[msg] += 1
+        return &#34;full&#34;
+
+    dimsInt = []
+    dimGood = True
+
+    for dm, x in zip((&#34;x&#34;, &#34;y&#34;, &#34;w&#34;, &#34;h&#34;), dims):
+        if not x.isdecimal():
+            warnings.setdefault(f&#34;{dm}={x} is not a number&#34;, collections.Counter())[
+                msg
+            ] += 1
+            dimGood = False
+            continue
+
+        dimsInt.append(int(x))
+
+    if not dimGood:
+        return &#34;full&#34;
+
+    if isPct:
+        (pctX, pctY, pctW, pctH) = dimsInt
+
+        pxX = int(round(pctX * absW / 100))
+        pxY = int(round(pctY * absH / 100))
+        pxW = int(round(pctW * absW / 100))
+        pxH = int(round(pctH * absH / 100))
+    else:
+        (pxX, pxY, pxW, pxH) = dimsInt
+
+    return f&#34;{pxX},{pxY},{pxW},{pxH}&#34;</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.getResultDir"><code class="name flex">
 <span>def <span class="ident">getResultDir</span></span>(<span>baseDir, headPart, version, prod, silent, withSuffix=True)</span>
@@ -3517,6 +3896,125 @@ the development WATM resides under <code>dev</code>.</p>
 </dl>
 <h2 id="returns">Returns</h2>
 <p>The path to the versioned dir where the WATM ends up.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L611-L723" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def getResultDir(baseDir, headPart, version, prod, silent, withSuffix=True):
+    &#34;&#34;&#34;Determines the directory for the resulting WATM.
+
+    The directory to which the resulting WATM is written, depends on a number of
+    factors:
+
+    *   production or development
+    *   the repo location
+    *   the relative location of the tf directory in the repo
+
+    The WATM is written to somewhere under the `watm` directory at the toplevel
+    of the repo.
+
+    The version of the WATM is the version of the TF from which it is generated plus
+    a suffix, containing a sequence number. If `withSuffix` is False, the
+    suffix will be suppressed.
+
+    Whenever a generation is executed, a new sequence number is chosen,
+    so that no previous version gets overwritten. Of course, when `withSuffix` is False,
+    previous versions will be overwritten.
+
+    If there is a file `latest` in the directory of the WATM versions, its number is
+    taken as the previous version suffix. But if there are versions with a higher
+    suffix in that directory, we take the highest one of them as previous version
+    suffix.
+
+    Whatever we got, we increment it and write it to the file `latest`.
+    That is the new version suffix.
+
+    Inside the resulting directory, the production WATM resides under `prod` and
+    the development WATM resides under `dev`.
+
+    Parameters
+    ----------
+    baseDir: string
+        The path to the repo location
+    headPart: string
+        The path from the repo location to the `tf` directory.
+    version: string
+        The version of the TF on which the WATM is based
+    prod: string:
+        Whether we are in a production or development or preview run
+    silent: boolean
+        Whether we should operate silently.
+    withSuffix: boolean, True
+        If False, we suppress the suffix behind the TF version
+
+    Returns
+    -------
+    The path to the versioned dir where the WATM ends up.
+    &#34;&#34;&#34;
+    prodRep = (
+        &#34;production&#34;
+        if prod == &#34;prod&#34;
+        else &#34;preview&#34; if prod == &#34;preview&#34; else &#34;development&#34;
+    )
+    prodFix = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;} else &#34;dev&#34;
+    resultDirBase = f&#34;{baseDir}{headPart}/{TT_NAME}&#34;
+    initTree(resultDirBase, fresh=False)
+
+    if withSuffix:
+        latestFile = f&#34;{resultDirBase}/latest&#34;
+        prefix = f&#34;{version}-&#34;
+        numReps = {
+            pv.removeprefix(prefix)
+            for pv in dirContents(resultDirBase)[1]
+            if pv.startswith(prefix)
+        }
+
+        maxNum = max(
+            (int(num) for numRep in numReps if (num := numRep.lstrip(&#34;0&#34;)).isdecimal()),
+            default=0,
+        )
+
+        if not fileExists(latestFile):
+            latestNum = 0
+        else:
+            with fileOpen(latestFile) as fh:
+                contents = fh.read().strip().split(&#34;-&#34;, 1)
+                latestNumStr = (contents[1] if len(contents) == 2 else &#34;&#34;).lstrip(&#34;0&#34;)
+                latestNum = int(latestNumStr) if latestNumStr.isdecimal() else 0
+
+        if prod == &#34;prod&#34;:
+            newNum = max((latestNum, maxNum))
+
+            while True:
+                newNum += 1
+                newNumRep = f&#34;{newNum:&gt;03}&#34;
+                if newNumRep in numReps:
+                    continue
+                break
+
+            with fileOpen(latestFile, &#34;w&#34;) as fh:
+                fh.write(f&#34;{version}-{newNumRep}\n&#34;)
+        else:
+            newNumRep = f&#34;{latestNum:&gt;03}&#34;
+
+        resultVersionDir = f&#34;{resultDirBase}/{version}/{prodFix}&#34;
+    else:
+        resultVersionDir = f&#34;{resultDirBase}/{version}-{newNumRep}/{prodFix}&#34;
+
+    if not silent:
+        console(f&#34;Writing {prodRep} data to {resultVersionDir}&#34;)
+    else:
+        resultVersionDir = f&#34;{resultDirBase}/{version}&#34;
+
+        if not silent:
+            if dirExists(resultVersionDir):
+                console(f&#34;Overwriting development data in {resultVersionDir}&#34;)
+            else:
+                console(f&#34;Writing development data to new {resultVersionDir}&#34;)
+
+    return resultVersionDir</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.operationalize"><code class="name flex">
 <span>def <span class="ident">operationalize</span></span>(<span>data)</span>
@@ -3594,6 +4092,178 @@ specified node type, None is returned.</li>
 <dt><strong><code>data</code></strong> :&ensp;<code>dict</code></dt>
 <dd>The iiif.yml settings, and then the <code>scans</code> part.</dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L726-L891" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def operationalize(data):
+    &#34;&#34;&#34;Translates the scans part of iiif.yml file into annotation instructions.
+
+    The `scans` part of iiif.yml is structured as follows:
+
+    ```
+    feature:
+      nodeType1:
+        vars:
+            ndtp1: feat1 or expr1
+            ndtpn: featn or exprn
+        value: expression1
+     nodeType2:
+       ...
+    ```
+
+    `feature` is the name of the annotation.
+
+    The `nodeType`*i* specifies what values the annotation takes for nodes of this type.
+
+    `expression`*i* is a string that may contain place holders:
+
+    *   `&lt;macroName&gt;` refers to a macro defined under the `macros` top-level section.
+        Macros may contain other place holders.
+    *   `«parameter»` refers to values defined in the `switches` and `constants`
+        top-level sections. They may contain placeholders for variables, i.e. things
+        that will be filled in from the data, not from config settings.
+    *   `{variable}`.  Values obtained from the data.
+        Variables are looked up when going through the (Text-Fabric) data, node by node.
+    *   A function call. The list of supported functions is:
+
+        -   `px`: compute absolute pixel values out of percentage values.
+            It takes 2 arguments: file name and region specifier.
+            The region specifier has the form `pct:x,y,w,h`. If not
+            the result is equal to `full`.
+            The file name is the file name of the image, by which the absolute size can
+            be retrieved.
+            The result has the form x,y,w,h where these are now pixel values.
+
+        The syntax of a function call is:
+
+        ```
+        fname:|param1|param2| ...
+        ```
+
+        The last param does not need to be terminated by a `|`
+
+        For each node, we know what the relevant page scan is.
+
+        There is a limited supply of variables:
+
+        *   `folder`: the name of the folder the page is in;
+        *   `file`: the name of the file the page is in;
+        *   `region`: the region of interest on a scan, given as a IIIF region value:
+            `full` or *x,y,w,h* or `pct:`*x,y,w,h*.
+        *   `rot`: the rotation to be applied when showing a scan.
+        *   `page`: the page number of the page of the scan, not necessarily a number,
+            whatever is provided by the data.
+        *   `node`: the value of the node itself (i.e. the node number).
+
+    *Subtleties.*
+
+    The variables will be looked up from the feature values of the node in question.
+
+    How that must be done can be defined per node type in a `vars` declaration. You
+    can define the vars `region`, `rot`, `page` and `node`.
+
+    If you specify a name, it is the name of a feature, and its value for the node
+    in question will be retrieved.
+
+    But if there is a `.` in the name, the first part is a parent node type, and we
+    lookup the first parent of that node type. The second part is the feature name,
+    and we take the value of that feature from that parent.
+
+    For the variable `node` you have extra possibilities:
+
+    *   `=+1`: take the current node and add 1.
+    *   `=-1`: take the current node and subtract 1
+    *   In both cases: if the incremented or decremented node is no longer the
+        specified node type, None is returned.
+
+    Parameters
+    ----------
+    data: dict
+        The iiif.yml settings, and then the `scans` part.
+    &#34;&#34;&#34;
+    scanInfo = {}
+    funcRe = re.compile(
+        r&#34;&#34;&#34;
+        ^
+        ([a-zA-Z][a-zA-Z0-9_]*)
+        :‖
+        (.*)
+        $
+        &#34;&#34;&#34;,
+        re.X | re.S,
+    )
+    warnings = {}
+
+    for extraFeat, featInfo in data.items():
+        for nodeType, info in featInfo.items():
+            variables = info[&#34;vars&#34;]
+            value = info[&#34;value&#34;]
+
+            newVars = {}
+
+            for name, val in variables.items():
+                if val.endswith(&#34;-1&#34;):
+                    newVal = val[0:-2]
+                    shift = -1
+                elif val.endswith(&#34;+1&#34;):
+                    newVal = val[0:-2]
+                    shift = 1
+                else:
+                    newVal = val
+                    shift = 0
+
+                feat = tuple(newVal.split(&#34;.&#34;, 1))
+
+                if len(feat) == 1:
+                    parent = None
+                    child = None
+                    feat = feat[0]
+                else:
+                    parent, feat = feat
+
+                    if parent.startswith(&#34;-&#34;):
+                        child = parent[1:]
+                        parent = None
+                    else:
+                        child = None
+
+                newVars[name] = (parent, child, feat, shift)
+
+            match = funcRe.match(value)
+
+            if match:
+                good = True
+
+                funcName, args = match.group(1, 2)
+
+                if funcName not in {&#34;px&#34;, &#34;checkPage&#34;}:
+                    warnings.setdefault(&#34;unknown function name&#34;, collections.Counter())[
+                        f&#34;{extraFeat}.{nodeType}: {value}&#34;
+                    ] += 1
+                    good = False
+
+                args = args.split(&#34;‖&#34;)
+                nArgs = len(args)
+                requiredArgs = (
+                    2 if funcName == &#34;px&#34; else 2 if funcName == &#34;checkPage&#34; else None
+                )
+
+                if nArgs != requiredArgs:
+                    warnings.setdefault(
+                        &#34;#args = {nArgs}, should be {requiredArgs}&#34;,
+                        collections.Counter(),
+                    )[value] += 1
+
+                if good:
+                    value = (funcName, *args)
+
+            scanInfo.setdefault(nodeType, []).append((extraFeat, value, newVars))
+
+    showWarnings(&#34;CONFIG&#34;, warnings)
+    return (len(warnings) == 0, scanInfo)</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.rep"><code class="name flex">
 <span>def <span class="ident">rep</span></span>(<span>status)</span>
@@ -3610,6 +4280,46 @@ specified node type, None is returned.</li>
 <dt><code>string</code></dt>
 <dd>&nbsp;</dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L597-L608" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def rep(status):
+    &#34;&#34;&#34;Represent a boolean status for a message to the console.
+
+    Parameters
+    ----------
+    status: boolean
+
+    Returns
+    -------
+    string
+    &#34;&#34;&#34;
+    return &#34;OK&#34; if status else &#34;XX&#34;</code></pre>
+</details>
+</dd>
+<dt id="tff.convert.watm.showWarnings"><code class="name flex">
+<span>def <span class="ident">showWarnings</span></span>(<span>label, warnings)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L894-L903" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def showWarnings(label, warnings):
+    if len(warnings):
+        console(f&#34;{label} warnings&#34;)
+
+        for msg, cases in warnings.items():
+            nCases = sum(cases.values())
+            console(f&#34;\t{nCases:&gt;4}x {msg}&#34;, error=True)
+
+            for case, n in cases.items():
+                console(f&#34;\t\t{n:&gt;4}x {case}&#34;, error=True)</code></pre>
+</details>
 </dd>
 </dl>
 </section>
@@ -3618,7 +4328,7 @@ specified node type, None is returned.</li>
 <dl>
 <dt id="tff.convert.watm.WATM"><code class="flex name class">
 <span>class <span class="ident">WATM</span></span>
-<span>(</span><span>app, nsOrig, pageInfoDir=None, skipMeta=False, extra={}, silent=False, prod='dev', **kwargs)</span>
+<span>(</span><span>app, nsOrig, locally=False, pageInfoDir=None, skipMeta=False, extra={}, silent=False, withScans=True, prod='dev', **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>The export machinery is exposed as a class, wrapped around a TF dataset.</p>
@@ -3635,6 +4345,10 @@ See <code>tf.app.use</code></dd>
 representation. For example <code>tei</code> for a TEI corpus, <code>pagexml</code> for a
 PageXML corpus. The namespace is not related to XML namespaces, it is
 merely a device to categorize the resulting annotations.</dd>
+<dt><strong><code>locally</code></strong> :&ensp;<code>whether we are running on a local machine</code> or <code>on a server;</code></dt>
+<dd>this is only relevant if <code>prod == "preview"</code>. In that case, <code>locally</code>
+distinguishes whether we run de preview machinery on a local development
+computer, or on a server within public-facing infrastructure</dd>
 <dt><strong><code>pageInfoDir</code></strong> :&ensp;<code>string</code>, optional <code>None</code></dt>
 <dd>If supplied, extra page information will be looked up from files in this
 directory.</dd>
@@ -3666,13 +4380,15 @@ versions and can be overwritten.</p>
 <p>This mechanism helps you to ensure that you do not change existing
 versions in the <code>watm</code> directory.</p>
 </dd>
+<dt><strong><code>withScans</code></strong> :&ensp;<code>boolean</code>, optional <code>True</code></dt>
+<dd>Whether to expect scans in the corpus.</dd>
 <dt><strong><code>kwargs</code></strong> :&ensp;<code>dict</code></dt>
 <dd>Addtional parameters passed to the parsing of the IIIF config file</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/00b1804a2a0eabefbe45442674c2cdeab9cb62dd/tff/convert/watm.py#L910-L2793" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L971-L3083" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class WATM:
     &#34;&#34;&#34;The export machinery is exposed as a class, wrapped around a TF dataset.&#34;&#34;&#34;
@@ -3681,10 +4397,12 @@ versions in the <code>watm</code> directory.</p>
         self,
         app,
         nsOrig,
+        locally=False,
         pageInfoDir=None,
         skipMeta=False,
         extra={},
         silent=False,
+        withScans=True,
         prod=&#34;dev&#34;,
         **kwargs,
     ):
@@ -3703,6 +4421,10 @@ versions in the <code>watm</code> directory.</p>
             representation. For example `tei` for a TEI corpus, `pagexml` for a
             PageXML corpus. The namespace is not related to XML namespaces, it is
             merely a device to categorize the resulting annotations.
+        locally: whether we are running on a local machine or on a server;
+            this is only relevant if `prod == &#34;preview&#34;`. In that case, `locally`
+            distinguishes whether we run de preview machinery on a local development
+            computer, or on a server within public-facing infrastructure
         pageInfoDir: string, optional None
             If supplied, extra page information will be looked up from files in this
             directory.
@@ -3735,6 +4457,8 @@ versions in the <code>watm</code> directory.</p>
 
             This mechanism helps you to ensure that you do not change existing
             versions in the `watm` directory.
+        withScans: boolean, optional True
+            Whether to expect scans in the corpus.
         kwargs: dict
             Addtional parameters passed to the parsing of the IIIF config file
 
@@ -3743,7 +4467,9 @@ versions in the <code>watm</code> directory.</p>
         self.nsOrig = nsOrig
         self.extra = extra
         self.silent = silent
+        self.withScans = withScans
         self.prod = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;} else &#34;dev&#34;
+        self.pageInfoDir = pageInfoDir
         api = app.api
         F = api.F
         E = api.E
@@ -3774,9 +4500,16 @@ versions in the <code>watm</code> directory.</p>
 
         self.error = False
 
+        manifestLevel = settings.get(&#34;manifestLevel&#34;, &#34;folder&#34;)
+        console(f&#34;Manifestlevel = {manifestLevel}&#34;)
         zoneBased = settings.get(&#34;zoneBased&#34;, False)
         self.zoneBased = zoneBased
-        iiifSettings = parseIIIF(settings, prod, &#34;scans&#34;, **kwargs) if settings else {}
+
+        iiifSettings = (
+            parseIIIF(settings, prod, &#34;scans&#34;, locally=locally, **kwargs)
+            if settings
+            else {}
+        )
         (good, self.scanInfo) = operationalize(iiifSettings)
 
         if not good:
@@ -3832,6 +4565,14 @@ versions in the <code>watm</code> directory.</p>
 
         self.excludeElements = set(cfg.excludeElements or [])
         self.excludeFeatures = set(cfg.excludeFeatures or [])
+        excludeToplevelSections = cfg.excludeToplevelSections or []
+
+        excludeTopIndex = {}
+
+        for i, cond in enumerate(excludeToplevelSections):
+            rep = &#34;, &#34;.join(f&#34;{k}={v}&#34; for (k, v) in sorted(cond.items()))
+            excludeTopIndex[i] = dict(rep=rep, nodes=set())
+
         self.asTsv = cfg.asTsv
 
         self.L = api.L
@@ -3839,6 +4580,10 @@ versions in the <code>watm</code> directory.</p>
         self.F = F
         self.E = E
         self.Fs = api.Fs
+        T = api.T
+        sectionTypes = T.sectionTypes
+        toplevelSectionType = sectionTypes[0] if len(sectionTypes) else None
+        self.toplevelSectionType = toplevelSectionType
         self.slotType = self.F.otype.slotType
         self.maxSlot = self.F.otype.maxSlot
         self.maxSlotPlus = self.F.otype.maxSlot + 1
@@ -3863,8 +4608,49 @@ versions in the <code>watm</code> directory.</p>
         is_metav = F.is_meta.v if &#34;is_meta&#34; in FAllSet else None
         self.is_metav = is_metav
 
-        folders = [F.folder.v(f) for f in F.otype.s(&#34;folder&#34;)]
-        self.pages = getPageInfo(pageInfoDir, zoneBased, folders)
+        excludedToplevelNodes = {}
+        self.excludedToplevelNodes = excludedToplevelNodes
+
+        if len(excludeToplevelSections):
+            Fs = api.Fs
+            sectionTypes = T.sectionTypes
+
+            if toplevelSectionType is not None:
+                toplevelNodes = F.otype.s(toplevelSectionType)
+
+                for s in toplevelNodes:
+                    for i, cond in enumerate(excludeToplevelSections):
+                        satisfies = True
+
+                        for feat, val in cond.items():
+                            if not Fs(feat).v(s) == val:
+                                satisfies = False
+                                break
+
+                        if satisfies:
+                            exInfo = excludeTopIndex[i]
+                            rep = exInfo[&#34;rep&#34;]
+                            exInfo[&#34;nodes&#34;].add(s)
+            if not silent:
+                console(&#34;Top level exclusions:&#34;)
+
+            for exInfo in excludeTopIndex.values():
+                rep = exInfo[&#34;rep&#34;]
+                nodes = exInfo[&#34;nodes&#34;]
+                nNodes = len(nodes)
+                plural = &#34;&#34; if nNodes == 1 else &#34;s&#34;
+
+                if not silent:
+                    console(f&#34;\t{nNodes:&gt;3} node{plural} with {rep}&#34;)
+                    for node in nodes:
+                        excludedToplevelNodes[node] = rep
+        else:
+            console(&#34;No instructions to exclude toplevel section nodes&#34;)
+
+        # the following collects all embedded nodes of excluded top level nodes
+        self.getExcluded()
+
+        self.pages = getPageInfo(pageInfoDir, zoneBased, manifestLevel)
 
         inheritFeatures = cfg.inheritFeatures or []
         self.inheritFeatures = inheritFeatures
@@ -3914,11 +4700,50 @@ versions in the <code>watm</code> directory.</p>
 
         self.skipMeta = skipMeta
 
-        imageLocations = getImageLocations(app, prod, silent)
-        scanRefDir = imageLocations.scanRefDir
-        doCovers = imageLocations.doCovers
+        if withScans:
+            imageLocations = getImageLocations(app, prod, silent)
+            scanRefDir = imageLocations.scanRefDir
+            doCovers = imageLocations.doCovers
 
-        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
+            self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
+
+    def getExcluded(self):
+        silent = self.silent
+        F = self.F
+        L = self.L
+        lu = L.u
+        excludedToplevelNodes = self.excludedToplevelNodes
+        toplevelSectionType = self.toplevelSectionType
+
+        excludedNodes = set()
+        self.excludedNodes = excludedNodes
+
+        if toplevelSectionType is not None and len(excludedToplevelNodes):
+            for n in range(1, F.otype.maxNode + 1):
+                if n in excludedToplevelNodes:
+                    excludedNodes.add(n)
+                else:
+                    sN = lu(n, otype=toplevelSectionType)
+
+                    if sN and sN[0] in excludedToplevelNodes:
+                        excludedNodes.add(n)
+
+        excludedSlotMap = {}
+        self.excludedSlotMap = excludedSlotMap
+
+        eSlot = 0
+
+        for slot in range(1, F.otype.maxSlot + 1):
+            if slot in excludedNodes:
+                continue
+
+            eSlot += 1
+            excludedSlotMap[eSlot] = slot
+
+        if not silent:
+            nExcluded = len(excludedNodes)
+            nAll = F.otype.maxNode
+            console(f&#34;Excluded nodes: {nExcluded} from {nAll} nodes&#34;)
 
     def console(self, msg, **kwargs):
         &#34;&#34;&#34;Print something to the output.
@@ -3940,6 +4765,7 @@ versions in the <code>watm</code> directory.</p>
         to indices in this list is stored in member `waFromTF`.
         &#34;&#34;&#34;
         error = self.error
+        silent = self.silent
 
         if error:
             self.console(&#34;Cannot run because of an earlier error&#34;)
@@ -3950,6 +4776,9 @@ versions in the <code>watm</code> directory.</p>
         slotType = self.slotType
         textRepoType = self.textRepoType
         skipMeta = self.skipMeta
+        excludedNodes = self.excludedNodes
+        excludedToplevelNodes = self.excludedToplevelNodes
+        toplevelSectionType = self.toplevelSectionType
 
         emptyv = self.emptyv
         strv = self.strv
@@ -3958,15 +4787,23 @@ versions in the <code>watm</code> directory.</p>
         rafterv = self.rafterv
         is_metav = self.is_metav
 
-        texts = []
+        texts = {}
         waFromTF = {}
 
         self.texts = texts
         self.waFromTF = waFromTF
 
         for ti, sNode in enumerate(F.otype.s(textRepoType)):
+            if sNode in excludedNodes:
+                if not silent:
+                    ssNode = L.u(sNode, otype=toplevelSectionType)[0]
+                    rep = excludedToplevelNodes[ssNode]
+                    console(f&#34;Skipping {textRepoType} node {sNode} because {rep}&#34;)
+
+                continue
+
             text = []
-            texts.append(text)
+            texts[ti] = text
 
             for s in L.d(sNode, otype=slotType):
                 if skipMeta and is_metav(s):
@@ -4031,8 +4868,11 @@ versions in the <code>watm</code> directory.</p>
         The mapping from slots to indices in the list of tokens is now extended
         with the mapping from nodes to corresponding node annotations.
 
-        So member `waFromTF` is now a full mapping from all nodes in TF to
+        So member `waFromTF` is now a full mapping from nodes in TF to
         tokens and/or annotations in WATM.
+
+        It does not contain nodes that have been excluded by toplevel section
+        exclusions.
         &#34;&#34;&#34;
         error = self.error
 
@@ -4053,12 +4893,31 @@ versions in the <code>watm</code> directory.</p>
         nsOrig = self.nsOrig
         skipMeta = self.skipMeta
         extra = self.extra
+        textRepoType = self.textRepoType
         inheritFeatures = self.inheritFeatures
         excludeElements = self.excludeElements
         excludeFeatures = self.excludeFeatures
+        withScans = self.withScans
         scanInfo = self.scanInfo
-        sizeInfo = self.sizeInfo.get(&#34;pages&#34;, {})
-        silent = self.silent
+
+        excludedNodes = self.excludedNodes
+
+        if withScans:
+            sizeInfo = self.sizeInfo.get(&#34;pages&#34;, {})
+        else:
+            sizeInfo = {}
+
+        pageInfoDir = self.pageInfoDir
+        facsMissingFile = f&#34;{pageInfoDir}/facsMissing.tsv&#34;
+        facsMissing = set()
+
+        if fileExists(facsMissingFile):
+            with fileOpen(facsMissingFile) as fh:
+                next(fh)
+
+                for line in fh:
+                    (kind, file, page, n) = line.rstrip(&#34;\n&#34;).split(&#34;\t&#34;)
+                    facsMissing.add((kind, page))
 
         waFromTF = self.waFromTF
 
@@ -4088,8 +4947,12 @@ versions in the <code>watm</code> directory.</p>
             nodes = F.otype.s(otype)
 
             for n in nodes:
+                if n in excludedNodes:
+                    continue
+
                 ws = eoslots(n)
                 sb, se = (ws[0], ws[-1])
+
                 if len(ws) != se - sb + 1:
                     discontinuousNodes[otype].append(n)
 
@@ -4127,6 +4990,9 @@ versions in the <code>watm</code> directory.</p>
                 thisScanInfo = scanInfo[otype]
 
                 for i, n in enumerate(nodes):
+                    if n in excludedNodes:
+                        continue
+
                     for extraFeat, value, variables in thisScanInfo:
                         values = {}
                         valuesOK = True
@@ -4166,12 +5032,25 @@ versions in the <code>watm</code> directory.</p>
                                     F,
                                     L,
                                     sizeInfo,
+                                    facsMissing,
                                     extraFeat,
                                     otype,
                                     n,
                                     *[v.format(**values) for v in value[1:]],
                                     warnings,
                                 )
+                            elif value[0] == &#34;checkPage&#34;:
+                                page = values[&#34;page&#34;]
+
+                                if (&#34;pages&#34;, page) in facsMissing:
+                                    values[&#34;page&#34;] = FILE_NOT_FOUND
+                                    file = values[&#34;file&#34;]
+                                    warnings.setdefault(
+                                        f&#34;{otype}:{extraFeat}: &#34;
+                                        f&#34;substituted {FILE_NOT_FOUND}&#34;,
+                                        collections.Counter(),
+                                    )[f&#34;{file}: {page}&#34;] += 1
+                                val = value[-1].format(**values)
                         else:
                             val = value.format(**values)
 
@@ -4179,12 +5058,7 @@ versions in the <code>watm</code> directory.</p>
                             KIND_ATTR, NS_TV, f&#34;{extraFeat}={val}&#34;, mkSingleTarget(n)
                         )
 
-        for msg, cases in warnings.items():
-            nCases = len(cases)
-            console(f&#34;RUNTIME: {msg} ({nCases}x)&#34;, error=True)
-
-            for case in (cases[0:5] if silent else cases):
-                console(f&#34;\t{case}&#34;, error=True)
+        showWarnings(&#34;DATA&#34;, warnings)
 
         warnings = None
 
@@ -4206,7 +5080,7 @@ versions in the <code>watm</code> directory.</p>
             isNote = False
 
             if isTei:
-                parts = feat.split(&#34;_&#34;, 2)
+                parts = feat.split(&#34;_&#34;, 1)
                 isRend = len(parts) &gt;= 2 and parts[0] == &#34;rend&#34;
                 isNote = len(parts) == 2 and parts[0] == &#34;is&#34; and parts[1] == &#34;note&#34;
 
@@ -4214,13 +5088,25 @@ versions in the <code>watm</code> directory.</p>
                 body = parts[1] if isRend else &#34;note&#34;
 
                 for n, val in Fs(feat).items():
-                    if n not in waFromTF or not val or skipMeta and is_metav(n):
+                    if (
+                        n in excludedNodes
+                        or n not in waFromTF
+                        or not val
+                        or skipMeta
+                        and is_metav(n)
+                    ):
                         continue
 
                     self.mkAnno(KIND_FMT, ns, body, mkSingleTarget(n))
             else:
                 for n, val in Fs(feat).items():
-                    if n not in waFromTF or val is None or skipMeta and is_metav(n):
+                    if (
+                        n in excludedNodes
+                        or n not in waFromTF
+                        or val is None
+                        or skipMeta
+                        and is_metav(n)
+                    ):
                         continue
 
                     body = f&#34;{feat}={val}&#34;
@@ -4241,14 +5127,24 @@ versions in the <code>watm</code> directory.</p>
                 ns = NS_NONE
 
             for fromNode, toNodes in Es(feat).items():
-                if fromNode not in waFromTF or skipMeta and is_metav(fromNode):
+                if (
+                    fromNode in excludedNodes
+                    or fromNode not in waFromTF
+                    or skipMeta
+                    and is_metav(fromNode)
+                ):
                     continue
 
                 targetFrom = mkSingleTarget(fromNode)
 
                 if type(toNodes) is dict:
                     for toNode, val in toNodes.items():
-                        if toNode not in waFromTF or skipMeta and is_metav(toNode):
+                        if (
+                            toNode in excludedNodes
+                            or toNode not in waFromTF
+                            or skipMeta
+                            and is_metav(toNode)
+                        ):
                             continue
 
                         body = f&#34;{feat}={val}&#34;
@@ -4257,7 +5153,12 @@ versions in the <code>watm</code> directory.</p>
                         self.mkAnno(KIND_EDGE, ns, body, target)
                 else:
                     for toNode in toNodes:
-                        if toNode not in waFromTF or skipMeta and is_metav(toNode):
+                        if (
+                            toNode in excludedNodes
+                            or toNode not in waFromTF
+                            or skipMeta
+                            and is_metav(toNode)
+                        ):
                             continue
 
                         targetTo = mkSingleTarget(toNode)
@@ -4266,6 +5167,9 @@ versions in the <code>watm</code> directory.</p>
 
         for feat, featData in extra.items():
             for n, value in featData.items():
+                if n in excludedNodes:
+                    continue
+
                 self.mkAnno(KIND_ANNO, NS_TT, f&#34;{feat}={value}&#34;, mkSingleTarget(n))
 
         for instruction in inheritFeatures:
@@ -4275,12 +5179,18 @@ versions in the <code>watm</code> directory.</p>
             features = instruction.features
 
             for sourceNode in F.otype.s(sourceType):
+                if sourceNode in excludedNodes:
+                    continue
+
                 destNodes = L.d(sourceNode, otype=destinationType)
 
                 for feat in features:
                     value = Fs(feat).v(sourceNode)
 
                     for destNode in destNodes:
+                        if destNode in excludedNodes:
+                            continue
+
                         self.mkAnno(
                             KIND_ATTR,
                             namespace,
@@ -4312,7 +5222,9 @@ versions in the <code>watm</code> directory.</p>
         nFarTargets = len(farTargets)
 
         if nFarTargets:
-            self.console(f&#34;WARNING: targets across tier0 items, {nFarTargets}x&#34;)
+            self.console(
+                f&#34;WARNING: targets across {textRepoType} items, {nFarTargets}x&#34;
+            )
 
             for otype, ti0, start, ti1, end in farTargets[0:10]:
                 self.console(
@@ -4321,7 +5233,7 @@ versions in the <code>watm</code> directory.</p>
             if nFarTargets &gt; 10:
                 self.console(f&#34;... and {nFarTargets - 10} more.&#34;)
 
-    def getLogicalPairs(self):
+    def getLogicalPairs(self, waFromTF):
         hyphenation = self.hyphenation
         F = self.F
         L = self.L
@@ -4339,6 +5251,9 @@ versions in the <code>watm</code> directory.</p>
         lines = F.otype.s(lineType)
 
         for line in lines:
+            if line not in waFromTF:
+                continue
+
             lastSlot = L.d(line, otype=slotType)[-1]
 
             if strv(lastSlot) == &#34;-&#34; and lastSlot &gt; 1 and lastSlot &lt; maxSlot:
@@ -4382,6 +5297,7 @@ versions in the <code>watm</code> directory.</p>
         hyphenation = self.hyphenation
         maxNodePlus = self.maxNodePlus
         maxSlotPlus = self.maxSlotPlus
+        excludedNodes = self.excludedNodes
 
         # text files
 
@@ -4424,13 +5340,14 @@ versions in the <code>watm</code> directory.</p>
         cr = &#34;&#34;
         nl = True
 
-        for i, text in enumerate(texts):
+        for ti, text in texts.items():
             j += 1
+
             if j &gt; PROGRESS_LIMIT:
                 cr = &#34;\r&#34;
                 nl = False
 
-            textFile = f&#34;{resultDir}/text-{i}.{ext}&#34;
+            textFile = f&#34;{resultDir}/text-{ti}.{ext}&#34;
             nText = len(text)
             total += nText
 
@@ -4443,7 +5360,7 @@ versions in the <code>watm</code> directory.</p>
                     writeJson(dict(_ordered_segments=text), asFile=fh)
 
             self.console(
-                f&#34;{cr}Text file {i:&gt;4}: {nText:&gt;8} segments to {textFile}&#34;,
+                f&#34;{cr}Text file {ti:&gt;4}: {nText:&gt;8} segments to {textFile}&#34;,
                 newline=nl,
             )
 
@@ -4476,6 +5393,7 @@ versions in the <code>watm</code> directory.</p>
             with fileOpen(annoFile, &#34;w&#34;) as fh:
                 if asTsv:
                     fh.write(&#34;annoid\tkind\tnamespace\tbody\ttarget\n&#34;)
+
                     for aId, (kind, namespace, body, target) in thisAnnoStore.items():
                         body = body.replace(&#34;\t&#34;, &#34;\\t&#34;).replace(&#34;\n&#34;, &#34;\\n&#34;)
                         fh.write(f&#34;{aId}\t{kind}\t{namespace}\t{body}\t{target}\n&#34;)
@@ -4528,15 +5446,21 @@ versions in the <code>watm</code> directory.</p>
         with fileOpen(slotmapFile, &#34;w&#34;) as fh:
             fh.write(&#34;position\tnode\n&#34;)
             for n in range(1, maxSlotPlus):
+                if n in excludedNodes or n not in waFromTF:
+                    continue
+
                 (file, pos) = waFromTF[n]
                 fh.write(f&#34;{file}:{pos}\t{n}\n&#34;)
 
         with fileOpen(nodemapFile, &#34;w&#34;) as fh:
             fh.write(&#34;annotation\tnode\n&#34;)
+
             for n in range(maxSlotPlus, maxNodePlus):
-                aId = waFromTF.get(n, None)
-                if aId is not None:
-                    fh.write(f&#34;{aId}\t{n}\n&#34;)
+                if n in excludedNodes or n not in waFromTF:
+                    continue
+
+                aId = waFromTF[n]
+                fh.write(f&#34;{aId}\t{n}\n&#34;)
 
         self.console(f&#34;Slot mapping written to {slotmapFile}&#34;)
         self.console(f&#34;Node mapping written to {nodemapFile}&#34;)
@@ -4549,7 +5473,7 @@ versions in the <code>watm</code> directory.</p>
             with fileOpen(logicalFile, &#34;w&#34;) as fh:
                 fh.write(&#34;token1\ttoken2\tstr\n&#34;)
 
-                pairs = self.getLogicalPairs()
+                pairs = self.getLogicalPairs(waFromTF)
 
                 for t1, t2, text in pairs:
                     fh.write(f&#34;{t1}\t{t2}\t{text}\n&#34;)
@@ -4713,6 +5637,10 @@ versions in the <code>watm</code> directory.</p>
         We unpack targets if they contain structured information.
         &#34;&#34;&#34;
 
+        # determine the set of relevant TF nodes (due to exclusions)
+
+        self.getExcluded()
+
         # collect the files
 
         asTsv = self.asTsv
@@ -4758,13 +5686,16 @@ versions in the <code>watm</code> directory.</p>
 
         skipMeta = self.skipMeta
         is_metav = self.is_metav
+        excludedSlotMap = self.excludedSlotMap
 
         waSlotTF = {}
         tokenFiles = []
 
         slot = 1
 
-        for tfl, textFile in enumerate(textFiles):
+        for textFile in textFiles:
+            ti = int(textFile.removeprefix(&#34;text-&#34;).removesuffix(f&#34;.{ext}&#34;))
+
             with fileOpen(f&#34;{resultDir}/{textFile}&#34;) as fh:
                 if asTsv:
                     next(fh)
@@ -4782,7 +5713,8 @@ versions in the <code>watm</code> directory.</p>
                     while skipMeta and is_metav(slot):
                         slot += 1
 
-                    waSlotTF[slot] = (tfl, offset)
+                    origSlot = excludedSlotMap[slot]
+                    waSlotTF[origSlot] = (ti, offset)
                     slot += 1
 
         self.testTokens = tokenFiles
@@ -4910,7 +5842,7 @@ versions in the <code>watm</code> directory.</p>
             )
 
         textWA = &#34;&#34;.join(&#34;&#34;.join(tokens) for tokens in tokenFiles)
-        textTF = &#34;&#34;.join(&#34;&#34;.join(text) for text in texts)
+        textTF = &#34;&#34;.join(&#34;&#34;.join(text) for text in texts.values())
 
         tGood = self.strEqual(textTF, textWA, silent)
 
@@ -4939,6 +5871,8 @@ versions in the <code>watm</code> directory.</p>
         annotations = self.testAnnotations
         silent = self.silent
         excludeElements = self.excludeElements
+        # excludedNodes = self.excludedNodes
+        testNodes = self.testNodes
 
         self.console(&#34;Testing the elements ...&#34;)
 
@@ -4946,6 +5880,10 @@ versions in the <code>watm</code> directory.</p>
         nPisTF = 0
 
         for n in range(maxSlotPlus, maxNodePlus):
+            # if n in excludedNodes:
+            if n not in testNodes:
+                continue
+
             nType = fotypev(n)
             isPi = nType.startswith(&#34;?&#34;)
 
@@ -4961,9 +5899,6 @@ versions in the <code>watm</code> directory.</p>
             else:
                 if nType not in excludeElements:
                     nElementsTF += 1
-
-        nElementsWA = 0
-        nPisWA = 0
 
         nodeFromAid = self.nodeFromAid
 
@@ -4993,12 +5928,12 @@ versions in the <code>watm</code> directory.</p>
 
         element = 0
         pi = 0
-        other = 0
         goodName = 0
         wrongName = 0
         unmapped = 0
 
-        self.console(f&#34;\t{len(nodeFromAid)} element/pi annotations&#34;)
+        nElemPi = sum(1 for x in nodeFromAid if type(x) is str)
+        self.console(f&#34;\t{nElemPi} element/pi annotations&#34;)
 
         wrongTargets = []
         allTargets = 0
@@ -5009,7 +5944,6 @@ versions in the <code>watm</code> directory.</p>
             isPi = kind == KIND_PI
 
             if not (isElem or isPi):
-                other += 1
                 continue
 
             if isElem:
@@ -5059,7 +5993,6 @@ versions in the <code>watm</code> directory.</p>
 
         self.console(f&#34;\tElement      : {element:&gt;6} x&#34;)
         self.console(f&#34;\tPi           : {pi:&gt;6} x&#34;)
-        self.console(f&#34;\tOther        : {other:&gt;6} x&#34;)
         self.console(f&#34;\tGood name    : {goodName:&gt;6} x&#34;)
         self.console(f&#34;\tWrong name   : {wrongName:&gt;6} x&#34;)
         self.console(f&#34;\tGood target  : {goodTargets:&gt;6} x&#34;)
@@ -5270,7 +6203,7 @@ versions in the <code>watm</code> directory.</p>
             if not feat.startswith(&#34;rend_&#34;):
                 continue
 
-            value = feat.split(&#34;_&#34;, 2)[1]
+            value = feat.split(&#34;_&#34;, 1)[1]
             if value == &#34;note&#34;:
                 continue
 
@@ -5408,7 +6341,7 @@ versions in the <code>watm</code> directory.</p>
 
         self.console(&#34;Testing the edges ...&#34;)
 
-        tfFromWAEdges = {}
+        waEdges = {}
 
         for aId, kind, ns, body, target in annotations:
             if kind != KIND_EDGE:
@@ -5419,40 +6352,13 @@ versions in the <code>watm</code> directory.</p>
             toNode = nodeFromAid[to]
             parts = body.split(&#34;=&#34;, 1)
             name, val = (body, None) if len(parts) == 1 else parts
-            tfFromWAEdges.setdefault(name, {}).setdefault(fromNode, {})[toNode] = val
+            waEdges.setdefault(name, {}).setdefault(fromNode, {})[toNode] = val
 
-        if not silent:
-            console(f&#34;\tFound: {len(nodeFromAid)} nodes&#34;)
+        tfEdges = {}
 
-            for edge, edgeData in sorted(tfFromWAEdges.items()):
-                console(f&#34;\tFound edge {edge} with {len(edgeData)} starting nodes&#34;)
-
-        allGood = True
-
-        for edge in set(Eall()) | set(tfFromWAEdges):
+        for edge in Eall():
             if edge == OSLOTS or edge in excludeFeatures:
                 continue
-
-            self.console(f&#34;\tChecking edge {edge}&#34;)
-
-            good = True
-
-            x = f&#34;edge {edge}: &#34; if silent else &#34;\t\t&#34;
-
-            if edge not in set(Eall()):
-                console(f&#34;{x}missing in TF data&#34;, error=True)
-                good = False
-
-            if edge not in tfFromWAEdges:
-                console(f&#34;{x}missing in annotation data&#34;, error=True)
-                good = False
-
-            if not good:
-                good = False
-                allGood = False
-                continue
-
-            dataTF = {}
 
             for f, ts in Es(edge).items():
                 if f not in testNodes:
@@ -5462,14 +6368,50 @@ versions in the <code>watm</code> directory.</p>
                     for t, v in ts.items():
                         if t not in testNodes:
                             continue
-                        dataTF.setdefault(f, {})[t] = v
+
+                        tfEdges.setdefault(edge, {}).setdefault(f, {})[t] = v
                 else:
                     for t in ts:
                         if t not in testNodes:
                             continue
-                        dataTF.setdefault(f, {})[t] = None
 
-            dataWA = tfFromWAEdges[edge]
+                        tfEdges.setdefault(edge, {}).setdefault(f, {})[t] = None
+
+        if not silent:
+            console(f&#34;\tFound: {len(waEdges)} edges in annotations&#34;)
+
+            for edge, edgeData in sorted(waEdges.items()):
+                console(f&#34;\t\tedge {edge} with {len(edgeData)} starting nodes&#34;)
+
+            console(f&#34;\tFound: {len(tfEdges)} edges in annotations&#34;)
+
+            for edge, edgeData in sorted(tfEdges.items()):
+                console(f&#34;\t\tedge {edge} with {len(edgeData)} starting nodes&#34;)
+
+        allGood = True
+
+        for edge in set(tfEdges) | set(waEdges):
+            self.console(f&#34;\tChecking edge {edge}&#34;)
+
+            good = True
+
+            x = f&#34;edge {edge}: &#34; if silent else &#34;\t\t&#34;
+
+            if edge not in tfEdges:
+                console(f&#34;\t\t{x}missing in TF data&#34;, error=True)
+                good = False
+
+            if edge not in waEdges:
+                console(f&#34;\t\t{x}missing in annotation data&#34;, error=True)
+                good = False
+
+            if not good:
+                good = False
+                allGood = False
+                continue
+
+            dataTF = tfEdges[edge]
+            dataWA = waEdges[edge]
 
             fromNodesTF = set(dataTF)
             fromNodesWA = set(dataWA)
@@ -5481,7 +6423,7 @@ versions in the <code>watm</code> directory.</p>
                 self.console(f&#34;\t\tsame {nFromTF} fromNodes&#34;)
             else:
                 console(
-                    f&#34;{x}from nodes differ: {nFromTF} in TF, {nFromWA} in WA&#34;,
+                    f&#34;\t\t{x}from nodes differ: {nFromTF} in TF, {nFromWA} in WA&#34;,
                     error=True,
                 )
                 good = False
@@ -5504,7 +6446,8 @@ versions in the <code>watm</code> directory.</p>
             if len(diffs):
                 good = False
                 console(
-                    f&#34;{x}differences in toNodes for {len(diffs)} fromNodes&#34;, error=True
+                    f&#34;\t\t{x}differences in toNodes for {len(diffs)} fromNodes&#34;,
+                    error=True,
                 )
 
                 for f, toNodeInfoTF, toNodeInfoWA in sorted(diffs)[0:10]:
@@ -5520,7 +6463,7 @@ versions in the <code>watm</code> directory.</p>
                         self.console(f&#34;\t\t\tsame {nToTF} toNodes&#34;)
                     else:
                         console(
-                            f&#34;{x}\ttoNodes differ: {nToTF} in TF, {nToWA} in WA&#34;,
+                            f&#34;{x}\t\ttoNodes differ: {nToTF} in TF, {nToWA} in WA&#34;,
                             error=True,
                         )
                     for t in toNodesTF | toNodesWA:
@@ -5550,7 +6493,9 @@ versions in the <code>watm</code> directory.</p>
                                 )
 
             if not good or not silent:
-                console(f&#34;\t{rep(good)} - {nToChecked} toNodes checked&#34;, error=not good)
+                console(
+                    f&#34;\t\t{rep(good)} - {nToChecked} toNodes checked&#34;, error=not good
+                )
 
             if not good:
                 allGood = False
@@ -5579,6 +6524,36 @@ versions in the <code>watm</code> directory.</p>
 <dt><code>boolean</code></dt>
 <dd>Whether the two values are equal.</dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L2070-L2093" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">@staticmethod
+def numEqual(nTF, nWA, silent):
+    &#34;&#34;&#34;Compare two numbers and report the outcome.
+
+    Used for testing the WATM conversion.
+
+    Parameters
+    ----------
+    nTF: integer
+        The number as it is counted from the original TF dataset.
+    nWA: integer
+        The number as it is counted from the generated WATM dataset.
+
+    Returns
+    -------
+    boolean
+        Whether the two values are equal.
+    &#34;&#34;&#34;
+    error = nTF != nWA
+
+    if error or not silent:
+        console(f&#34;\tTF: {nTF:&gt;6}\n\tWA: {nWA:&gt;6}&#34;, error=error)
+
+    return nTF == nWA</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.WATM.strEqual"><code class="name flex">
 <span>def <span class="ident">strEqual</span></span>(<span>tf, wa, silent)</span>
@@ -5598,6 +6573,64 @@ versions in the <code>watm</code> directory.</p>
 <dt><code>boolean</code></dt>
 <dd>Whether the two values are equal.</dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L2095-L2146" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">@staticmethod
+def strEqual(tf, wa, silent):
+    &#34;&#34;&#34;Compare two strings and report the outcome.
+
+    Used for testing the WATM conversion.
+
+    Parameters
+    ----------
+    nTF: string
+        The string as encountered in the original TF dataset.
+    nWA: string
+        The string as encountered in the generated WATM dataset.
+
+    Returns
+    -------
+    boolean
+        Whether the two values are equal.
+    &#34;&#34;&#34;
+    different = False
+
+    for i, cTF in enumerate(tf):
+        if i &gt;= len(wa):
+            contextI = max((0, i - 10))
+            console(f&#34;\tWA {i}: {wa[contextI:i]} &lt;END&gt;&#34;, error=True)
+            console(f&#34;\tTF {i}: {tf[contextI:i]} &lt;&gt; {tf[i:i + 10]}&#34;, error=True)
+            different = True
+            break
+        elif tf[i] != wa[i]:
+            contextI = max((0, i - 10))
+            console(
+                f&#34;\tWA {i}: {wa[contextI:i]} &lt;{wa[i]}&gt; {wa[i + 1:i + 11]}&#34;,
+                error=True,
+            )
+            console(
+                f&#34;\tTF {i}: {tf[contextI:i]} &lt;{tf[i]}&gt; {tf[i + 1:i + 11]}&#34;,
+                error=True,
+            )
+            different = True
+            break
+
+    if not different and len(wa) &gt; len(tf):
+        i = len(tf)
+        contextI = max((0, i - 10))
+        console(f&#34;\tWA {i}: {wa[contextI:i]} &lt;&gt; {wa[i:i + 10]}&#34;, error=True)
+        console(f&#34;\tTF {i}: {tf[contextI:i]} &lt;END&gt;&#34;, error=True)
+        different = True
+
+    sampleWA = f&#34;{wa[0:20]} ... {wa[-20:]}&#34;.replace(&#34;\n&#34;, &#34; &#34;)
+    sampleTF = f&#34;{tf[0:20]} ... {tf[-20:]}&#34;.replace(&#34;\n&#34;, &#34; &#34;)
+    if not silent:
+        console(f&#34;\tTF: {sampleTF:&gt;6}\n\tWA: {sampleWA:&gt;6}&#34;)
+    return not different</code></pre>
+</details>
 </dd>
 </dl>
 <h3>Methods</h3>
@@ -5609,12 +6642,119 @@ versions in the <code>watm</code> directory.</p>
 <div class="desc"><p>Print something to the output.</p>
 <p>This works exactly as <code>tf.core.helpers.console</code></p>
 <p>When the silent member of the object is True, the message will be suppressed.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L1326-L1336" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def console(self, msg, **kwargs):
+    &#34;&#34;&#34;Print something to the output.
+
+    This works exactly as `tf.core.helpers.console`
+
+    When the silent member of the object is True, the message will be suppressed.
+    &#34;&#34;&#34;
+    silent = self.silent
+
+    if not silent:
+        console(msg, **kwargs)</code></pre>
+</details>
 </dd>
-<dt id="tff.convert.watm.WATM.getLogicalPairs"><code class="name flex">
-<span>def <span class="ident">getLogicalPairs</span></span>(<span>self)</span>
+<dt id="tff.convert.watm.WATM.getExcluded"><code class="name flex">
+<span>def <span class="ident">getExcluded</span></span>(<span>self)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L1288-L1324" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def getExcluded(self):
+    silent = self.silent
+    F = self.F
+    L = self.L
+    lu = L.u
+    excludedToplevelNodes = self.excludedToplevelNodes
+    toplevelSectionType = self.toplevelSectionType
+
+    excludedNodes = set()
+    self.excludedNodes = excludedNodes
+
+    if toplevelSectionType is not None and len(excludedToplevelNodes):
+        for n in range(1, F.otype.maxNode + 1):
+            if n in excludedToplevelNodes:
+                excludedNodes.add(n)
+            else:
+                sN = lu(n, otype=toplevelSectionType)
+
+                if sN and sN[0] in excludedToplevelNodes:
+                    excludedNodes.add(n)
+
+    excludedSlotMap = {}
+    self.excludedSlotMap = excludedSlotMap
+
+    eSlot = 0
+
+    for slot in range(1, F.otype.maxSlot + 1):
+        if slot in excludedNodes:
+            continue
+
+        eSlot += 1
+        excludedSlotMap[eSlot] = slot
+
+    if not silent:
+        nExcluded = len(excludedNodes)
+        nAll = F.otype.maxNode
+        console(f&#34;Excluded nodes: {nExcluded} from {nAll} nodes&#34;)</code></pre>
+</details>
+</dd>
+<dt id="tff.convert.watm.WATM.getLogicalPairs"><code class="name flex">
+<span>def <span class="ident">getLogicalPairs</span></span>(<span>self, waFromTF)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L1814-L1848" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def getLogicalPairs(self, waFromTF):
+    hyphenation = self.hyphenation
+    F = self.F
+    L = self.L
+    slotType = self.slotType
+    strv = self.strv
+    afterv = self.afterv
+    maxSlot = self.maxSlot
+
+    if hyphenation is None:
+        return []
+
+    lineType = hyphenation.lineType
+
+    pairs = []
+    lines = F.otype.s(lineType)
+
+    for line in lines:
+        if line not in waFromTF:
+            continue
+
+        lastSlot = L.d(line, otype=slotType)[-1]
+
+        if strv(lastSlot) == &#34;-&#34; and lastSlot &gt; 1 and lastSlot &lt; maxSlot:
+            s1 = lastSlot - 1
+            s2 = lastSlot + 1
+            pairs.append(
+                (
+                    s1,
+                    s2,
+                    f&#34;{strv(s1)}{strv(s2)}{afterv(s2)}&#34;,
+                )
+            )
+
+    return tuple(pairs)</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.WATM.makeAnno"><code class="name flex">
 <span>def <span class="ident">makeAnno</span></span>(<span>self)</span>
@@ -5624,8 +6764,388 @@ versions in the <code>watm</code> directory.</p>
 <p>The annotations are stored in a big list, in member <code>anno</code> of this object.</p>
 <p>The mapping from slots to indices in the list of tokens is now extended
 with the mapping from nodes to corresponding node annotations.</p>
-<p>So member <code>waFromTF</code> is now a full mapping from all nodes in TF to
-tokens and/or annotations in WATM.</p></div>
+<p>So member <code>waFromTF</code> is now a full mapping from nodes in TF to
+tokens and/or annotations in WATM.</p>
+<p>It does not contain nodes that have been excluded by toplevel section
+exclusions.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L1441-L1812" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def makeAnno(self):
+    &#34;&#34;&#34;Make all annotations.
+
+    The annotations are stored in a big list, in member `anno` of this object.
+
+    The mapping from slots to indices in the list of tokens is now extended
+    with the mapping from nodes to corresponding node annotations.
+
+    So member `waFromTF` is now a full mapping from nodes in TF to
+    tokens and/or annotations in WATM.
+
+    It does not contain nodes that have been excluded by toplevel section
+    exclusions.
+    &#34;&#34;&#34;
+    error = self.error
+
+    if error:
+        self.console(&#34;Cannot run because of an earlier error&#34;)
+        return
+
+    L = self.L
+    Es = self.Es
+    F = self.F
+    Fs = self.Fs
+    fotypev = self.fotypev
+    eoslots = self.eoslots
+    nodeFeatures = self.nodeFeatures
+    edgeFeatures = self.edgeFeatures
+    slotType = self.slotType
+    otypes = self.otypes
+    nsOrig = self.nsOrig
+    skipMeta = self.skipMeta
+    extra = self.extra
+    textRepoType = self.textRepoType
+    inheritFeatures = self.inheritFeatures
+    excludeElements = self.excludeElements
+    excludeFeatures = self.excludeFeatures
+    withScans = self.withScans
+    scanInfo = self.scanInfo
+
+    excludedNodes = self.excludedNodes
+
+    if withScans:
+        sizeInfo = self.sizeInfo.get(&#34;pages&#34;, {})
+    else:
+        sizeInfo = {}
+
+    pageInfoDir = self.pageInfoDir
+    facsMissingFile = f&#34;{pageInfoDir}/facsMissing.tsv&#34;
+    facsMissing = set()
+
+    if fileExists(facsMissingFile):
+        with fileOpen(facsMissingFile) as fh:
+            next(fh)
+
+            for line in fh:
+                (kind, file, page, n) = line.rstrip(&#34;\n&#34;).split(&#34;\t&#34;)
+                facsMissing.add((kind, page))
+
+    waFromTF = self.waFromTF
+
+    is_metav = self.is_metav
+
+    isTei = nsOrig == NS_TEI
+
+    annos = []
+    texts = self.texts
+    self.annos = annos
+    self.annosInherited = set()
+
+    invertedTargets = []
+    farTargets = []
+    discontinuousNodes = collections.defaultdict(list)
+
+    warnings = {}
+
+    def mkSingleTarget(n):
+        ts = waFromTF[n]
+        return f&#34;{ts[0]}:{ts[1]}&#34; if fotypev(n) == slotType else ts
+
+    for otype in otypes:
+        if otype == slotType or otype in excludeElements:
+            continue
+
+        nodes = F.otype.s(otype)
+
+        for n in nodes:
+            if n in excludedNodes:
+                continue
+
+            ws = eoslots(n)
+            sb, se = (ws[0], ws[-1])
+
+            if len(ws) != se - sb + 1:
+                discontinuousNodes[otype].append(n)
+
+            if skipMeta and (is_metav(ws[0]) or is_metav(ws[-1])):
+                continue
+
+            ti0, start = waFromTF[ws[0]]
+            ti1, end = waFromTF[ws[-1]]
+
+            if ti0 != ti1:
+                farTargets.append((otype, ti0, start, ti1, end))
+
+            if ti0 == ti1 and end &lt; start:
+                invertedTargets.append((otype, ti0, start, end))
+                start, end = (end, start)
+
+            startPoint = f&#34;{ti0}:{start}&#34;
+            endPoint = (
+                (&#34;&#34; if start == end else f&#34;-{end + 1}&#34;)
+                if ti0 == ti1
+                else f&#34;-{ti1}:{end + 1}&#34;
+            )
+            target = f&#34;{startPoint}{endPoint}&#34;
+            aId = (
+                self.mkAnno(KIND_PI, nsOrig, otype[1:], target)
+                if otype.startswith(&#34;?&#34;)
+                else self.mkAnno(
+                    KIND_ELEM, NS_FROM_OTYPE.get(otype, nsOrig), otype, target
+                )
+            )
+            waFromTF[n] = aId
+
+        if otype in scanInfo:
+            lastI = len(nodes) - 1
+            thisScanInfo = scanInfo[otype]
+
+            for i, n in enumerate(nodes):
+                if n in excludedNodes:
+                    continue
+
+                for extraFeat, value, variables in thisScanInfo:
+                    values = {}
+                    valuesOK = True
+
+                    for var, (parent, child, feat, shift) in variables.items():
+                        refI = i + shift
+
+                        if refI &lt; 0 or refI &gt; lastI:
+                            valuesOK = False
+                            break
+
+                        refN = nodes[refI]
+
+                        if parent is not None:
+                            refN = L.u(refN, otype=parent)[0]
+                        elif child is not None:
+                            refNs = L.d(refN, otype=child)
+
+                            if refNs:
+                                refN = refNs[0]
+                            else:
+                                valuesOK = False
+                                break
+
+                        thisValue = refN if feat == &#34;=&#34; else Fs(feat).v(refN)
+
+                        values[var] = thisValue
+
+                    if not valuesOK:
+                        continue
+
+                    val = None
+
+                    if type(value) is tuple:
+                        if value[0] == &#34;px&#34;:
+                            val = funcPx(
+                                F,
+                                L,
+                                sizeInfo,
+                                facsMissing,
+                                extraFeat,
+                                otype,
+                                n,
+                                *[v.format(**values) for v in value[1:]],
+                                warnings,
+                            )
+                        elif value[0] == &#34;checkPage&#34;:
+                            page = values[&#34;page&#34;]
+
+                            if (&#34;pages&#34;, page) in facsMissing:
+                                values[&#34;page&#34;] = FILE_NOT_FOUND
+                                file = values[&#34;file&#34;]
+                                warnings.setdefault(
+                                    f&#34;{otype}:{extraFeat}: &#34;
+                                    f&#34;substituted {FILE_NOT_FOUND}&#34;,
+                                    collections.Counter(),
+                                )[f&#34;{file}: {page}&#34;] += 1
+                            val = value[-1].format(**values)
+                    else:
+                        val = value.format(**values)
+
+                    self.mkAnno(
+                        KIND_ATTR, NS_TV, f&#34;{extraFeat}={val}&#34;, mkSingleTarget(n)
+                    )
+
+    showWarnings(&#34;DATA&#34;, warnings)
+
+    warnings = None
+
+    for feat in nodeFeatures:
+        if feat in excludeFeatures:
+            continue
+
+        ns = Fs(feat).meta.get(&#34;conversionCode&#34;, NS_FROM_FEAT.get(feat, nsOrig))
+
+        if ns is None:
+            console(
+                f&#34;Node feature {feat} has no namespace, &#34;
+                f&#34;defaulting to {NS_NONE}&#34;,
+                error=True,
+            )
+            ns = NS_NONE
+
+        isRend = False
+        isNote = False
+
+        if isTei:
+            parts = feat.split(&#34;_&#34;, 1)
+            isRend = len(parts) &gt;= 2 and parts[0] == &#34;rend&#34;
+            isNote = len(parts) == 2 and parts[0] == &#34;is&#34; and parts[1] == &#34;note&#34;
+
+        if isRend or isNote:
+            body = parts[1] if isRend else &#34;note&#34;
+
+            for n, val in Fs(feat).items():
+                if (
+                    n in excludedNodes
+                    or n not in waFromTF
+                    or not val
+                    or skipMeta
+                    and is_metav(n)
+                ):
+                    continue
+
+                self.mkAnno(KIND_FMT, ns, body, mkSingleTarget(n))
+        else:
+            for n, val in Fs(feat).items():
+                if (
+                    n in excludedNodes
+                    or n not in waFromTF
+                    or val is None
+                    or skipMeta
+                    and is_metav(n)
+                ):
+                    continue
+
+                body = f&#34;{feat}={val}&#34;
+                self.mkAnno(KIND_ATTR, ns, body, mkSingleTarget(n))
+
+    for feat in edgeFeatures:
+        if feat in excludeFeatures:
+            continue
+
+        ns = Es(feat).meta.get(&#34;conversionCode&#34;, NS_FROM_FEAT.get(feat, nsOrig))
+
+        if ns is None:
+            console(
+                f&#34;Edge feature {feat} has no conversion code, &#34;
+                f&#34;defaulting to {NS_NONE}&#34;,
+                error=True,
+            )
+            ns = NS_NONE
+
+        for fromNode, toNodes in Es(feat).items():
+            if (
+                fromNode in excludedNodes
+                or fromNode not in waFromTF
+                or skipMeta
+                and is_metav(fromNode)
+            ):
+                continue
+
+            targetFrom = mkSingleTarget(fromNode)
+
+            if type(toNodes) is dict:
+                for toNode, val in toNodes.items():
+                    if (
+                        toNode in excludedNodes
+                        or toNode not in waFromTF
+                        or skipMeta
+                        and is_metav(toNode)
+                    ):
+                        continue
+
+                    body = f&#34;{feat}={val}&#34;
+                    targetTo = mkSingleTarget(toNode)
+                    target = f&#34;{targetFrom}-&gt;{targetTo}&#34;
+                    self.mkAnno(KIND_EDGE, ns, body, target)
+            else:
+                for toNode in toNodes:
+                    if (
+                        toNode in excludedNodes
+                        or toNode not in waFromTF
+                        or skipMeta
+                        and is_metav(toNode)
+                    ):
+                        continue
+
+                    targetTo = mkSingleTarget(toNode)
+                    target = f&#34;{targetFrom}-&gt;{targetTo}&#34;
+                    self.mkAnno(KIND_EDGE, ns, feat, target)
+
+    for feat, featData in extra.items():
+        for n, value in featData.items():
+            if n in excludedNodes:
+                continue
+
+            self.mkAnno(KIND_ANNO, NS_TT, f&#34;{feat}={value}&#34;, mkSingleTarget(n))
+
+    for instruction in inheritFeatures:
+        sourceType = instruction.source
+        destinationType = instruction.destination
+        namespace = instruction.namespace
+        features = instruction.features
+
+        for sourceNode in F.otype.s(sourceType):
+            if sourceNode in excludedNodes:
+                continue
+
+            destNodes = L.d(sourceNode, otype=destinationType)
+
+            for feat in features:
+                value = Fs(feat).v(sourceNode)
+
+                for destNode in destNodes:
+                    if destNode in excludedNodes:
+                        continue
+
+                    self.mkAnno(
+                        KIND_ATTR,
+                        namespace,
+                        f&#34;{feat}={value}&#34;,
+                        mkSingleTarget(destNode),
+                        inherited=True,
+                    )
+
+    if len(invertedTargets):
+        self.console(f&#34;WARNING: inverted targets, {len(invertedTargets)}x&#34;)
+
+        for otype, ti0, start, end in invertedTargets:
+            text = texts[ti0]
+            sega = text[start]
+            segb = text[end - 1]
+            self.console(f&#34;{otype:&gt;20} {start:&gt;6} `{sega}` &gt; {end - 1} `{segb}`&#34;)
+
+    if len(discontinuousNodes):
+        nDis = sum(len(x) for x in discontinuousNodes.values())
+        self.console(f&#34;WARNING: {nDis} discontinuous nodes encountered&#34;)
+
+        for otype, nodes in discontinuousNodes.items():
+            nn = len(nodes)
+            self.console(f&#34;\t{nn} x of type {otype}&#34;)
+
+            examples = &#34;, &#34;.join(str(n) for n in nodes[0:10])
+            self.console(f&#34;\t\t{examples}&#34;)
+
+    nFarTargets = len(farTargets)
+
+    if nFarTargets:
+        self.console(
+            f&#34;WARNING: targets across {textRepoType} items, {nFarTargets}x&#34;
+        )
+
+        for otype, ti0, start, ti1, end in farTargets[0:10]:
+            self.console(
+                f&#34;{otype:&gt;20} [{ti0:&gt;4}:{start:&gt;6}] - [{ti1:&gt;4}:{end - 1:&gt;6}]&#34;
+            )
+        if nFarTargets &gt; 10:
+            self.console(f&#34;... and {nFarTargets - 10} more.&#34;)</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.WATM.makeText"><code class="name flex">
 <span>def <span class="ident">makeText</span></span>(<span>self)</span>
@@ -5635,6 +7155,88 @@ tokens and/or annotations in WATM.</p></div>
 <p>The text is a list of tokens and will be stored in member <code>text</code> in this object.
 Additionally, the mapping from slot numbers in the TF data
 to indices in this list is stored in member <code>waFromTF</code>.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L1338-L1413" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def makeText(self):
+    &#34;&#34;&#34;Creates the text data.
+
+    The text is a list of tokens and will be stored in member `text` in this object.
+    Additionally, the mapping from slot numbers in the TF data
+    to indices in this list is stored in member `waFromTF`.
+    &#34;&#34;&#34;
+    error = self.error
+    silent = self.silent
+
+    if error:
+        self.console(&#34;Cannot run because of an earlier error&#34;)
+        return
+
+    F = self.F
+    L = self.L
+    slotType = self.slotType
+    textRepoType = self.textRepoType
+    skipMeta = self.skipMeta
+    excludedNodes = self.excludedNodes
+    excludedToplevelNodes = self.excludedToplevelNodes
+    toplevelSectionType = self.toplevelSectionType
+
+    emptyv = self.emptyv
+    strv = self.strv
+    rstrv = self.rstrv
+    afterv = self.afterv
+    rafterv = self.rafterv
+    is_metav = self.is_metav
+
+    texts = {}
+    waFromTF = {}
+
+    self.texts = texts
+    self.waFromTF = waFromTF
+
+    for ti, sNode in enumerate(F.otype.s(textRepoType)):
+        if sNode in excludedNodes:
+            if not silent:
+                ssNode = L.u(sNode, otype=toplevelSectionType)[0]
+                rep = excludedToplevelNodes[ssNode]
+                console(f&#34;Skipping {textRepoType} node {sNode} because {rep}&#34;)
+
+            continue
+
+        text = []
+        texts[ti] = text
+
+        for s in L.d(sNode, otype=slotType):
+            if skipMeta and is_metav(s):
+                continue
+
+            after = rafterv(s) if rafterv else None
+
+            if after is None:
+                after = afterv(s) if afterv else None
+
+            if after is None:
+                after = &#34;&#34;
+
+            if emptyv and emptyv(s):
+                value = after
+            else:
+                string = rstrv(s) if rstrv else None
+
+                if string is None:
+                    string = strv(s) if strv else None
+
+                if string is None:
+                    string = &#34;&#34;
+
+                value = f&#34;{string}{after}&#34;
+
+            text.append(value)
+            t = len(text) - 1
+            waFromTF[s] = (ti, t)</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.WATM.mkAnno"><code class="name flex">
 <span>def <span class="ident">mkAnno</span></span>(<span>self, kind, ns, body, target, inherited=False)</span>
@@ -5655,6 +7257,37 @@ or <code>tuple</code> of <code>strings</code></dt>
 <dt><strong><code>inherited</code></strong> :&ensp;<code>boolean</code>, optional <code>False</code></dt>
 <dd>Whether this annotation derives from an inherited feature value</dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L1415-L1439" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def mkAnno(self, kind, ns, body, target, inherited=False):
+    &#34;&#34;&#34;Make a single annotation and return its id.
+
+    Parameters
+    ----------
+    kind: string
+        The kind of annotation.
+    ns: string
+        The namespace of the annotation.
+    body: string
+        The body of the annotation.
+    target: string  or tuple of strings
+        The target of the annotation.
+    inherited: boolean, optional False
+        Whether this annotation derives from an inherited feature value
+    &#34;&#34;&#34;
+    annos = self.annos
+    annosInherited = self.annosInherited
+    aId = f&#34;a{len(annos):&gt;08}&#34;
+    annos.append((kind, aId, ns, body, target))
+
+    if inherited:
+        annosInherited.add(aId)
+
+    return aId</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.WATM.testAll"><code class="name flex">
 <span>def <span class="ident">testAll</span></span>(<span>self, condensed=False)</span>
@@ -5677,6 +7310,72 @@ If <code>condensed</code> is True, we suppress this output.</dd>
 <dt><code>boolean</code></dt>
 <dd>Whether all things that must agree do indeed agree.</dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L2148-L2207" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def testAll(self, condensed=False):
+    &#34;&#34;&#34;Test all aspects of the WATM conversion.
+
+    For all kinds of information, such as nodes, edges, features, tokens,
+    annotations, we check whether the parts that should correspond between
+    the TF dataset and the WATM annotations do so indeed.
+
+    We present some statistics, and highlight the mismatches.
+
+    Parameters
+    ----------
+    condensed: boolean, optional False
+        If silent has been passed to the object, there is still some
+        output for each corpus, namely whether all tests have passed.
+        If `condensed` is True, we suppress this output.
+
+    Returns
+    -------
+    boolean
+        Whether all things that must agree do indeed agree.
+    &#34;&#34;&#34;
+    error = self.error
+    silent = self.silent
+
+    if error:
+        self.console(&#34;Cannot run because of an earlier error&#34;)
+        return
+
+    console(&#34;\tTesting WATM ...&#34;)
+    self.testSetup()
+
+    if self.error:
+        console(&#34;WATM data is incomplete. Testing aborted&#34;)
+        return
+
+    good = True
+
+    if not self.testText():
+        good = False
+
+    if not self.testElements():
+        good = False
+
+    if not self.testAttributes():
+        good = False
+
+    if not self.testExtra():
+        good = False
+
+    if not self.testEdges():
+        good = False
+
+    self.console(&#34;Overall outcome ...&#34;)
+
+    if not silent or not condensed:
+        sep = &#34;\t&#34; if silent else &#34;&#34;
+        console(f&#34;{sep}{rep(good)} - whether all tests passed&#34;, error=not good)
+
+    if not good:
+        self.error = True</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.WATM.testAttributes"><code class="name flex">
 <span>def <span class="ident">testAttributes</span></span>(<span>self)</span>
@@ -5698,6 +7397,224 @@ These annotations do not have namespace <code>TEI</code>.</p>
 <dt><code>boolean</code></dt>
 <dd>Whether all these tests succeed.</dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L2601-L2812" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def testAttributes(self):
+    &#34;&#34;&#34;Test the attributes.
+
+    We test whether attributes and features correspond to each other.
+
+    Some attributes in the original TEI are converted in a special way into
+    TF features: this holds for the `rend` attribute.
+    Basically, a value `rend=&#34;italic&#34;` is translated into feature
+    `is_italic=1`.
+    In turn, these features have been translated into annotations of kind
+    `format`. We test them separately.
+
+    We also do not test the attributes that have been inherited from nodes
+    to sub nodes during the WATM generation.
+    These annotations do not have namespace `TEI`.
+
+    Returns
+    -------
+    boolean
+        Whether all these tests succeed.
+    &#34;&#34;&#34;
+    Fs = self.Fs
+    Fall = self.Fall
+    eoslots = self.eoslots
+    waSlotTF = self.waSlotTF
+    skipMeta = self.skipMeta
+    annotations = self.testAnnotations
+    nodeFromAid = self.nodeFromAid
+    testNodes = self.testNodes
+    nsOrig = self.nsOrig
+    silent = self.silent
+    excludeFeatures = self.excludeFeatures
+
+    isTei = nsOrig == NS_TEI
+
+    self.console(&#34;Testing the attributes ...&#34;)
+
+    attWA = []
+
+    for aId, kind, ns, body, target in annotations:
+        if kind != KIND_ATTR:
+            continue
+        if type(target) is tuple and len(target) == 4:
+            target = (target[0], target[1])
+        node = nodeFromAid[target]
+        att, value = body.split(&#34;=&#34;, 1)
+        attWA.append((node, att, value))
+
+    attWA = sorted(attWA)
+
+    self.console(f&#34;\t{len(attWA)} attribute values&#34;)
+
+    good = 0
+    wrong = []
+
+    for node, att, valWA in attWA:
+        val = Fs(att).v(node)
+        valTF = None if val is None else str(val)
+
+        if valWA == valTF:
+            good += 1
+        else:
+            wrong.append((node, att, valWA, valTF))
+
+    consistent = len(wrong) == 0
+
+    self.console(f&#34;\tGood:     {good:&gt;5} x&#34;)
+
+    if not consistent or not silent:
+        console(f&#34;\tWrong:    {len(wrong):&gt;5} x&#34;, error=not consistent)
+
+        console(
+            f&#34;{rep(consistent)} - whether annotations are consistent with features&#34;,
+            error=not consistent,
+        )
+
+    attTF = []
+
+    for feat in Fall():
+        if feat in TF_SPECIFIC_FEATURES or feat in excludeFeatures:
+            continue
+
+        if skipMeta and feat == &#34;is_meta&#34;:
+            continue
+
+        if isTei and (
+            (feat != &#34;is_meta&#34; and feat.startswith(&#34;is_&#34;))
+            or feat.startswith(&#34;rend_&#34;)
+        ):
+            continue
+
+        for node, valTF in Fs(feat).items():
+            if node not in testNodes:
+                continue
+
+            slots = eoslots(node)
+            b = slots[0]
+            e = slots[-1]
+
+            if not (b in waSlotTF and e in waSlotTF):
+                continue
+
+            attTF.append((node, feat, None if valTF is None else str(valTF)))
+
+    attTF = sorted(attTF)
+
+    self.console(f&#34;\tWA attributes: {len(attWA)}&#34;)
+    self.console(f&#34;\tTF attributes: {len(attTF)}&#34;)
+
+    complete = attTF == attWA
+
+    if not complete or not silent:
+        console(
+            f&#34;{rep(complete)} - whether annotations are complete w.r.t. features&#34;,
+            error=not complete,
+        )
+
+    self.console(&#34;Testing the format attributes ...&#34;)
+
+    fmtWA = []
+
+    for aId, kind, ns, body, target in annotations:
+        if kind != KIND_FMT:
+            continue
+        if body == &#34;note&#34;:
+            continue
+        if type(target) is tuple and len(target) == 4:
+            target = (target[0], target[1])
+        node = nodeFromAid[target]
+        fmtWA.append((node, body))
+
+    fmtWA = sorted(fmtWA)
+    fmtFreqWA = collections.Counter()
+
+    for node, body in fmtWA:
+        fmtFreqWA[body] += 1
+
+    if not silent:
+        console(f&#34;\t{len(fmtWA)} format values&#34;)
+        console(&#34;\tformatting attributes: &#34;)
+
+        for fa, n in sorted(fmtFreqWA.items(), key=lambda x: (-x[1], x[0])):
+            console(f&#34;\t\t{n:&gt;6} x {fa}&#34;)
+
+    good = 0
+    wrong = []
+
+    for node, valWA in fmtWA:
+        feat = f&#34;rend_{valWA}&#34;
+        valTF = valWA if Fs(feat).v(node) else None
+
+        if valWA == valTF:
+            good += 1
+        else:
+            wrong.append((node, feat, valWA, valTF))
+
+    fconsistent = len(wrong) == 0
+
+    self.console(f&#34;\tGood:     {good:&gt;5} x&#34;)
+
+    if not fconsistent or not silent:
+        console(f&#34;\tWrong:    {len(wrong):&gt;5} x&#34;)
+
+        for node, feat, valWA, valTF in wrong[0:5]:
+            console(f&#34;\t\t{node:&gt;6} {feat}:\n&#34;, error=True)
+            console(f&#34;\t\t\tTF = «{valTF}»&#34;, error=True)
+            console(f&#34;\t\t\tWA = «{valWA}»&#34;, error=True)
+
+        console(
+            f&#34;{rep(fconsistent)} - &#34;
+            f&#34;whether format annotations are consistent with features&#34;,
+            error=not fconsistent,
+        )
+
+    fmtTF = []
+
+    for feat in Fall():
+        if feat in excludeFeatures:
+            continue
+
+        if not feat.startswith(&#34;rend_&#34;):
+            continue
+
+        value = feat.split(&#34;_&#34;, 1)[1]
+        if value == &#34;note&#34;:
+            continue
+
+        for node, valTF in Fs(feat).items():
+            slots = eoslots(node)
+            b = slots[0]
+            e = slots[-1]
+
+            if not (b in waSlotTF and e in waSlotTF):
+                continue
+
+            fmtTF.append((node, value))
+
+    fmtTF = sorted(fmtTF)
+
+    self.console(f&#34;\tWA format attributes: {len(fmtWA)}&#34;)
+    self.console(f&#34;\tTF format attributes: {len(fmtTF)}&#34;)
+
+    fcomplete = fmtTF == fmtWA
+
+    if not fcomplete or not silent:
+        console(
+            f&#34;{rep(complete)} - &#34;
+            f&#34;whether format annotations are complete w.r.t. features&#34;,
+            error=not fcomplete,
+        )
+
+    return consistent and complete and fconsistent and fcomplete</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.WATM.testEdges"><code class="name flex">
 <span>def <span class="ident">testEdges</span></span>(<span>self)</span>
@@ -5714,6 +7631,199 @@ by annotations.</p>
 <dt><code>boolean</code></dt>
 <dd>Whether all these tests succeed.</dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L2897-L3083" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def testEdges(self):
+    &#34;&#34;&#34;Test the edges.
+
+    Edges in TF are links between nodes, and they translate into annotations of
+    kind `edge` which target a pair of annotations: the `from` annotation,
+    and the `to` annotation.
+
+    Here we check whether the TF edges are faithfully and completely parallelled
+    by annotations.
+
+    Returns
+    -------
+    boolean
+        Whether all these tests succeed.
+    &#34;&#34;&#34;
+    Es = self.Es
+    Eall = self.Eall
+    annotations = self.testAnnotations
+    silent = self.silent
+    nodeFromAid = self.nodeFromAid
+    testNodes = self.testNodes
+    excludeFeatures = self.excludeFeatures
+
+    self.console(&#34;Testing the edges ...&#34;)
+
+    waEdges = {}
+
+    for aId, kind, ns, body, target in annotations:
+        if kind != KIND_EDGE:
+            continue
+
+        fro, to = target
+        fromNode = nodeFromAid[fro]
+        toNode = nodeFromAid[to]
+        parts = body.split(&#34;=&#34;, 1)
+        name, val = (body, None) if len(parts) == 1 else parts
+        waEdges.setdefault(name, {}).setdefault(fromNode, {})[toNode] = val
+
+    tfEdges = {}
+
+    for edge in Eall():
+        if edge == OSLOTS or edge in excludeFeatures:
+            continue
+
+        for f, ts in Es(edge).items():
+            if f not in testNodes:
+                continue
+
+            if type(ts) is dict:
+                for t, v in ts.items():
+                    if t not in testNodes:
+                        continue
+
+                    tfEdges.setdefault(edge, {}).setdefault(f, {})[t] = v
+            else:
+                for t in ts:
+                    if t not in testNodes:
+                        continue
+
+                    tfEdges.setdefault(edge, {}).setdefault(f, {})[t] = None
+
+    if not silent:
+        console(f&#34;\tFound: {len(waEdges)} edges in annotations&#34;)
+
+        for edge, edgeData in sorted(waEdges.items()):
+            console(f&#34;\t\tedge {edge} with {len(edgeData)} starting nodes&#34;)
+
+        console(f&#34;\tFound: {len(tfEdges)} edges in annotations&#34;)
+
+        for edge, edgeData in sorted(tfEdges.items()):
+            console(f&#34;\t\tedge {edge} with {len(edgeData)} starting nodes&#34;)
+
+    allGood = True
+
+    for edge in set(tfEdges) | set(waEdges):
+        self.console(f&#34;\tChecking edge {edge}&#34;)
+
+        good = True
+
+        x = f&#34;edge {edge}: &#34; if silent else &#34;\t\t&#34;
+
+        if edge not in tfEdges:
+            console(f&#34;\t\t{x}missing in TF data&#34;, error=True)
+            good = False
+
+        if edge not in waEdges:
+            console(f&#34;\t\t{x}missing in annotation data&#34;, error=True)
+            good = False
+
+        if not good:
+            good = False
+            allGood = False
+            continue
+
+        dataTF = tfEdges[edge]
+        dataWA = waEdges[edge]
+
+        fromNodesTF = set(dataTF)
+        fromNodesWA = set(dataWA)
+
+        nFromTF = len(fromNodesTF)
+        nFromWA = len(fromNodesWA)
+
+        if fromNodesTF == fromNodesWA:
+            self.console(f&#34;\t\tsame {nFromTF} fromNodes&#34;)
+        else:
+            console(
+                f&#34;\t\t{x}from nodes differ: {nFromTF} in TF, {nFromWA} in WA&#34;,
+                error=True,
+            )
+            good = False
+
+        diffs = []
+
+        nToChecked = 0
+
+        for f, toNodeInfoTF in dataTF.items():
+            toNodeInfoWA = dataWA[f]
+            toNodeInfoTF = {
+                k: None if v is None else str(v) for (k, v) in toNodeInfoTF.items()
+            }
+
+            if toNodeInfoTF != toNodeInfoWA:
+                diffs.append((f, toNodeInfoTF, toNodeInfoWA))
+
+            nToChecked += len(toNodeInfoTF)
+
+        if len(diffs):
+            good = False
+            console(
+                f&#34;\t\t{x}differences in toNodes for {len(diffs)} fromNodes&#34;,
+                error=True,
+            )
+
+            for f, toNodeInfoTF, toNodeInfoWA in sorted(diffs)[0:10]:
+                console(f&#34;{x}\tfromNode {f}&#34;, error=True)
+
+                toNodesTF = set(toNodeInfoTF)
+                toNodesWA = set(toNodeInfoWA)
+
+                nToTF = len(toNodesTF)
+                nToWA = len(toNodesWA)
+
+                if toNodesTF == toNodesWA:
+                    self.console(f&#34;\t\t\tsame {nToTF} toNodes&#34;)
+                else:
+                    console(
+                        f&#34;{x}\t\ttoNodes differ: {nToTF} in TF, {nToWA} in WA&#34;,
+                        error=True,
+                    )
+                for t in toNodesTF | toNodesWA:
+                    doCompare = True
+                    if t not in toNodesTF:
+                        console(f&#34;{x}\t\ttoNode {t} not in TF&#34;, error=True)
+                        doCompare = False
+                    else:
+                        valTF = toNodeInfoTF[t]
+
+                    if t not in toNodesWA:
+                        console(f&#34;{x}\t\ttoNode {t} not in WA&#34;, error=True)
+                        doCompare = False
+                    else:
+                        valWA = toNodeInfoWA[t]
+
+                    if doCompare:
+                        if valTF == valWA:
+                            self.console(
+                                f&#34;\t\t\t\ttoNode{t} values agree: {repr(valTF)}&#34;
+                            )
+                        else:
+                            console(
+                                f&#34;{x}\t\ttoNode{t} values differ: &#34;
+                                f&#34;TF: {repr(valTF)} WA: {repr(valWA)}&#34;,
+                                error=True,
+                            )
+
+        if not good or not silent:
+            console(
+                f&#34;\t\t{rep(good)} - {nToChecked} toNodes checked&#34;, error=not good
+            )
+
+        if not good:
+            allGood = False
+
+    self.console(f&#34;{rep(allGood)} - whether all edges agree&#34;)
+
+    return allGood</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.WATM.testElements"><code class="name flex">
 <span>def <span class="ident">testElements</span></span>(<span>self)</span>
@@ -5728,6 +7838,180 @@ dataset.</p>
 <dt><code>boolean</code></dt>
 <dd>Whether all these tests succeed.</dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L2432-L2599" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def testElements(self):
+    &#34;&#34;&#34;Test the elements.
+
+    We test the annotations representing elements/processing instructions
+    and check whether they correspond 1-1 to the non-slot nodes in the TF
+    dataset.
+
+    Returns
+    -------
+    boolean
+        Whether all these tests succeed.
+    &#34;&#34;&#34;
+    maxSlotPlus = self.maxSlotPlus
+    maxNodePlus = self.maxNodePlus
+    fotypev = self.fotypev
+    eoslots = self.eoslots
+    waSlotTF = self.waSlotTF
+    annotations = self.testAnnotations
+    silent = self.silent
+    excludeElements = self.excludeElements
+    # excludedNodes = self.excludedNodes
+    testNodes = self.testNodes
+
+    self.console(&#34;Testing the elements ...&#34;)
+
+    nElementsTF = 0
+    nPisTF = 0
+
+    for n in range(maxSlotPlus, maxNodePlus):
+        # if n in excludedNodes:
+        if n not in testNodes:
+            continue
+
+        nType = fotypev(n)
+        isPi = nType.startswith(&#34;?&#34;)
+
+        slots = eoslots(n)
+        b = slots[0]
+        e = slots[-1]
+
+        if not (b in waSlotTF and e in waSlotTF):
+            continue
+
+        if isPi:
+            nPisTF += 1
+        else:
+            if nType not in excludeElements:
+                nElementsTF += 1
+
+    nodeFromAid = self.nodeFromAid
+
+    nElementsWA = sum(1 if a[1] == KIND_ELEM else 0 for a in annotations)
+    nPisWA = sum(1 if a[1] == KIND_PI else 0 for a in annotations)
+
+    eGood = self.numEqual(nElementsTF, nElementsWA, silent)
+
+    if not eGood or not silent:
+        console(
+            f&#34;{rep(eGood)} - whether the amounts of elements and nodes agree&#34;,
+            error=not eGood,
+        )
+
+    if not silent:
+        console(&#34;Testing the processing instructions ...&#34;)
+
+    pGood = self.numEqual(nPisTF, nPisWA, silent)
+
+    if not pGood or not silent:
+        console(
+            f&#34;{rep(pGood)} - whether the amounts of processing instructions agree&#34;,
+            error=not pGood,
+        )
+
+    self.console(&#34;Testing the element/pi annotations ...&#34;)
+
+    element = 0
+    pi = 0
+    goodName = 0
+    wrongName = 0
+    unmapped = 0
+
+    nElemPi = sum(1 for x in nodeFromAid if type(x) is str)
+    self.console(f&#34;\t{nElemPi} element/pi annotations&#34;)
+
+    wrongTargets = []
+    allTargets = 0
+    goodTargets = 0
+
+    for aId, kind, ns, body, target in annotations:
+        isElem = kind == KIND_ELEM
+        isPi = kind == KIND_PI
+
+        if not (isElem or isPi):
+            continue
+
+        if isElem:
+            element += 1
+        else:
+            pi += 1
+
+        tag = body
+        node = nodeFromAid.get(aId, None)
+
+        if node is None:
+            unmapped += 1
+            continue
+
+        otype = fotypev(node)
+
+        if isPi and tag == otype[1:] or not isPi and tag == otype:
+            goodName += 1
+        else:
+            wrongName += 1
+
+        if type(target) is not tuple or len(target) != 4:
+            wrongTargets.append((aId, kind, body, target))
+        else:
+            node = nodeFromAid[aId]
+            slots = eoslots(node)
+            sb = slots[0]
+            se = slots[-1]
+            bTr = waSlotTF.get(sb, None)
+            eTr = waSlotTF.get(se, None)
+
+            if eTr is not None:
+                eTr = (eTr[0], eTr[1] + 1)
+
+            bWA = (target[0], target[1])
+            eWA = (target[2], target[3])
+
+            bRep = f&#34;{bWA}&#34; if bTr == bWA else f&#34;{bWA} XX {bTr}&#34;
+            eRep = f&#34;{eWA}&#34; if eTr == eWA else f&#34;{eWA} XX {eTr}&#34;
+
+            if bTr is None or eTr is None or bTr != bWA or eTr != eWA:
+                wrongTargets.append((aId, kind, body, f&#34;{bRep} - {eRep}&#34;))
+            else:
+                goodTargets += 1
+
+        allTargets += 1
+
+    self.console(f&#34;\tElement      : {element:&gt;6} x&#34;)
+    self.console(f&#34;\tPi           : {pi:&gt;6} x&#34;)
+    self.console(f&#34;\tGood name    : {goodName:&gt;6} x&#34;)
+    self.console(f&#34;\tWrong name   : {wrongName:&gt;6} x&#34;)
+    self.console(f&#34;\tGood target  : {goodTargets:&gt;6} x&#34;)
+    self.console(f&#34;\tWrong target : {len(wrongTargets):&gt;6} x&#34;)
+    self.console(f&#34;\tUnmapped     : {unmapped:&gt;6} x&#34;)
+
+    aGood = wrongName == 0 and unmapped == 0
+
+    if not aGood or not silent:
+        console(
+            f&#34;{rep(aGood)} - whether all element/pi annotations have good bodies&#34;,
+            error=not aGood,
+        )
+
+    tGood = len(wrongTargets) == 0
+
+    if not tGood or not silent:
+        console(
+            f&#34;{rep(tGood)} - whether all element/pi annotations have good targets&#34;,
+            error=not tGood,
+        )
+        if not tGood:
+            tExamples = &#34;\n\t\t&#34;.join(str(a) for a in wrongTargets[0:10])
+            console(f&#34;\t\t{tExamples}&#34;)
+
+    return aGood and tGood and eGood and pGood</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.WATM.testExtra"><code class="name flex">
 <span>def <span class="ident">testExtra</span></span>(<span>self)</span>
@@ -5743,6 +8027,94 @@ the kind <code>anno</code>.</p>
 <dt><code>boolean</code></dt>
 <dd>Whether all these tests succeed.</dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L2814-L2895" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def testExtra(self):
+    &#34;&#34;&#34;Test the extra data for on-the-fly annotations.
+
+    Annotations that have been generated out of the data stored in the
+    `extra` parameter with which the object has been initialized, all got
+    the kind `anno`.
+
+    Now we check these annotations against the data that went into it.
+
+    Returns
+    -------
+    boolean
+        Whether all these tests succeed.
+    &#34;&#34;&#34;
+    annotations = self.testAnnotations
+    nodeFromAid = self.nodeFromAid
+    extra = self.extra
+    silent = self.silent
+
+    self.console(&#34;Testing the extra annotations ...&#34;)
+
+    attWA = []
+
+    for aId, kind, ns, body, target in annotations:
+        if kind != KIND_ANNO:
+            continue
+        node = nodeFromAid[target]
+        att, value = body.split(&#34;=&#34;, 1)
+        attWA.append((node, att, value))
+
+    attWA = sorted(attWA)
+
+    attEX = []
+
+    for feat, featData in extra.items():
+        for n, value in featData.items():
+            attEX.append((n, feat, value))
+
+    attEX = sorted(attEX)
+
+    self.console(f&#34;\t{len(attEX)} extra feature values&#34;)
+    self.console(f&#34;\t{len(attWA)} extra annotations&#34;)
+
+    good = attWA == attEX
+
+    def showData(tuples, isin, isout):
+        data = {}
+
+        for n, f, v in tuples:
+            data.setdefault(f, {})[n] = v
+
+        for f in sorted(data):
+            fData = data[f]
+            console(
+                f&#34;\t{isin}: {f} misses {len(fData)} annotations in {isout}&#34;,
+                error=True,
+            )
+            for n in sorted(fData.keys())[0:3]:
+                console(f&#34;\t\t\t{n:&gt;7} = {fData[n]}&#34;, error=True)
+
+    if not good:
+        attWASet = set(attWA)
+        attEXSet = set(attEX)
+
+        onlyWA = attWASet - attEXSet
+        onlyEX = attEXSet - attWASet
+
+        if len(onlyWA):
+            showData(onlyWA, &#34;WA&#34;, &#34;EX&#34;)
+        else:
+            self.console(&#34;\tWA: All extra annotations derive from the extra data&#34;)
+        if len(onlyEX):
+            showData(onlyEX, &#34;EX&#34;, &#34;WA&#34;)
+        else:
+            self.console(&#34;\tEX: All extra data ended up as annotations&#34;)
+
+    if not good or not silent:
+        console(
+            f&#34;{rep(good)} - whether the extra annotations agree&#34;, error=not good
+        )
+
+    return good</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.WATM.testSetup"><code class="name flex">
 <span>def <span class="ident">testSetup</span></span>(<span>self)</span>
@@ -5753,6 +8125,196 @@ the kind <code>anno</code>.</p>
 and the annotations in the member <code>testAnnotations</code>, and the node mapping
 in the member <code>nodeFromAid</code>.
 We unpack targets if they contain structured information.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L2209-L2392" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def testSetup(self):
+    &#34;&#34;&#34;Prepare the tests.
+
+    We read the WATM dataset and store the tokens in member `testTokens`
+    and the annotations in the member `testAnnotations`, and the node mapping
+    in the member `nodeFromAid`.
+    We unpack targets if they contain structured information.
+    &#34;&#34;&#34;
+
+    # determine the set of relevant TF nodes (due to exclusions)
+
+    self.getExcluded()
+
+    # collect the files
+
+    asTsv = self.asTsv
+    hyphenation = self.hyphenation
+    resultDir = self.resultDir
+    resultFiles = dirContents(resultDir)[0]
+
+    ext = &#34;tsv&#34; if asTsv else &#34;json&#34;
+
+    def fileSort(name):
+        middle = name.split(&#34;.&#34;, 1)[0].split(&#34;-&#34;, 1)[1]
+        return f&#34;{middle:0&gt;10}&#34; if middle.isdecimal else middle
+
+    inheritedFile = f&#34;{resultDir}/{INHERITED_FILE}&#34;
+    textFiles = sorted(
+        (f for f in resultFiles if f.startswith(&#34;text-&#34;) and f.endswith(f&#34;.{ext}&#34;)),
+        key=fileSort,
+    )
+    annoFiles = sorted(
+        (f for f in resultFiles if f.startswith(&#34;anno-&#34;) and f.endswith(f&#34;.{ext}&#34;)),
+        key=fileSort,
+    )
+    mapFiles = [
+        f
+        for f in resultFiles
+        if (f.startswith(&#34;anno&#34;) or f.startswith(&#34;pos&#34;)) and f.endswith(&#34;2node.tsv&#34;)
+    ]
+
+    if NODEMAP_FILE not in mapFiles:
+        console(f&#34;ERROR: Missing map file {NODEMAP_FILE}&#34;)
+        self.error = True
+    if SLOTMAP_FILE not in mapFiles:
+        console(f&#34;ERROR: Missing map file {SLOTMAP_FILE}&#34;)
+        self.error = True
+    if hyphenation is not None and LOGICAL_FILE not in resultFiles:
+        console(f&#34;ERROR: Missing logical file {LOGICAL_FILE}&#34;)
+        self.error = True
+
+    if self.error:
+        return
+
+    # read the text files
+
+    skipMeta = self.skipMeta
+    is_metav = self.is_metav
+    excludedSlotMap = self.excludedSlotMap
+
+    waSlotTF = {}
+    tokenFiles = []
+
+    slot = 1
+
+    for textFile in textFiles:
+        ti = int(textFile.removeprefix(&#34;text-&#34;).removesuffix(f&#34;.{ext}&#34;))
+
+        with fileOpen(f&#34;{resultDir}/{textFile}&#34;) as fh:
+            if asTsv:
+                next(fh)
+                tokens = [
+                    t.rstrip(&#34;\n&#34;).replace(&#34;\\t&#34;, &#34;\t&#34;).replace(&#34;\\n&#34;, &#34;\n&#34;)
+                    for t in fh
+                ]
+            else:
+                text = readJson(asFile=fh, plain=True)
+                tokens = text[&#34;_ordered_segments&#34;]
+
+            tokenFiles.append(tokens)
+
+            for offset in range(len(tokens)):
+                while skipMeta and is_metav(slot):
+                    slot += 1
+
+                origSlot = excludedSlotMap[slot]
+                waSlotTF[origSlot] = (ti, offset)
+                slot += 1
+
+    self.testTokens = tokenFiles
+    self.waSlotTF = waSlotTF
+
+    # read the anno files
+
+    annosInherited = set()
+
+    if fileExists(inheritedFile):
+        with fileOpen(inheritedFile) as fh:
+            annosInherited = set(fh.read().split(&#34;\n&#34;))
+
+    annotations = []
+
+    for annoFile in annoFiles:
+        with fileOpen(f&#34;{resultDir}/{annoFile}&#34;) as fh:
+            if asTsv:
+                next(fh)
+                annos = {}
+
+                for line in fh:
+                    (aId, kind, ns, body, target) = line.rstrip(&#34;\n&#34;).split(&#34;\t&#34;)
+
+                    if aId in annosInherited:
+                        continue
+
+                    body = body.replace(&#34;\\t&#34;, &#34;\t&#34;).replace(&#34;\\n&#34;, &#34;\n&#34;)
+                    annos[aId] = (kind, ns, body, target)
+            else:
+                annos = readJson(asFile=fh, plain=True)
+
+                for aId in annosInherited:
+                    del annos[aId]
+
+            for aId, (kind, ns, body, target) in annos.items():
+                if ns == NS_TV:
+                    continue
+
+                if &#34;-&gt;&#34; in target:
+                    parts = target.split(&#34;-&gt;&#34;, 1)
+                else:
+                    parts = [target]
+
+                newParts = []
+
+                for part in parts:
+                    if &#34;:&#34; in part:
+                        boundaries = part.split(&#34;-&#34;, 1)
+                        fb, b = boundaries[0].split(&#34;:&#34;, 1)
+                        fb = int(fb)
+                        b = int(b)
+
+                        if len(boundaries) == 1:
+                            if kind == KIND_ELEM or kind == KIND_PI:
+                                part = (int(fb), int(b), int(fb), int(b) + 1)
+                            else:
+                                part = (int(fb), int(b))
+                        else:
+                            eParts = boundaries[1].split(&#34;:&#34;, 1)
+
+                            if len(eParts) == 1:
+                                fe, e = fb, int(eParts[0])
+                            else:
+                                fe, e = eParts
+                                fe = int(fe)
+                                e = int(e)
+                            part = (fb, b, fe, e)
+
+                    newParts.append(part)
+
+                target = newParts[0] if len(newParts) == 1 else tuple(newParts)
+
+                annotations.append((aId, kind, ns, body, target))
+
+    annotations = sorted(annotations)
+    self.testAnnotations = annotations
+
+    # read the map files
+
+    nodeFromAid = {}
+
+    with fileOpen(f&#34;{resultDir}/{SLOTMAP_FILE}&#34;) as fh:
+        next(fh)
+        for line in fh:
+            (pos, slot) = line.rstrip(&#34;\n&#34;).split(&#34;\t&#34;)
+            key = tuple(int(p) for p in pos.split(&#34;:&#34;))
+            nodeFromAid[key] = int(slot)
+
+    with fileOpen(f&#34;{resultDir}/{NODEMAP_FILE}&#34;) as fh:
+        next(fh)
+        for line in fh:
+            (aId, node) = line.rstrip(&#34;\n&#34;).split(&#34;\t&#34;)
+            nodeFromAid[aId] = int(node)
+
+    self.nodeFromAid = nodeFromAid
+    self.testNodes = set(nodeFromAid.values())</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.WATM.testText"><code class="name flex">
 <span>def <span class="ident">testText</span></span>(<span>self)</span>
@@ -5766,6 +8328,49 @@ whether the TF and WATM datasets agree on it.</p>
 <dt><code>boolean</code></dt>
 <dd>Whether all these tests succeed.</dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L2394-L2430" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def testText(self):
+    &#34;&#34;&#34;Test the text.
+
+    We test the number of tokens and the equality of the resulting text:
+    whether the TF and WATM datasets agree on it.
+
+    Returns
+    -------
+    boolean
+        Whether all these tests succeed.
+    &#34;&#34;&#34;
+    maxSlotPlus = self.maxSlotPlus
+    tokenFiles = self.testTokens
+    texts = self.texts
+    waSlotTF = self.waSlotTF
+    silent = self.silent
+
+    self.console(&#34;Testing the text ...&#34;)
+
+    nTokensTF = sum(1 if s in waSlotTF else 0 for s in range(1, maxSlotPlus))
+    nTokensWA = sum(len(tokens) for tokens in tokenFiles)
+    nGood = self.numEqual(nTokensTF, nTokensWA, silent)
+
+    if not nGood or not silent:
+        console(
+            f&#34;{rep(nGood)} - whether the amounts of tokens agree&#34;, error=not nGood
+        )
+
+    textWA = &#34;&#34;.join(&#34;&#34;.join(tokens) for tokens in tokenFiles)
+    textTF = &#34;&#34;.join(&#34;&#34;.join(text) for text in texts.values())
+
+    tGood = self.strEqual(textTF, textWA, silent)
+
+    if not tGood or not silent:
+        console(f&#34;{rep(tGood)} - whether the text is the same&#34;, error=not tGood)
+
+    return nGood and tGood</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.WATM.writeAll"><code class="name flex">
 <span>def <span class="ident">writeAll</span></span>(<span>self, resultVersion=None)</span>
@@ -5785,6 +8390,231 @@ this directory.
 This is needed if WATM is generated for a series of related datasets that
 have the same result base.</dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L1850-L2068" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def writeAll(self, resultVersion=None):
+    &#34;&#34;&#34;Write text and annotation data to disk.
+
+    The data will be written as JSON files, or, is `asTsv` is in force, as TSV
+    files.
+    When the annotation data grows larger than a certain threshold, it will be
+    divided over several files.
+
+    The annotations are sorted by annotation id.
+
+    Parameters
+    ----------
+    resultVersion: string, optional None
+        If not None, the resultVersion is in  this directory.
+        This is needed if WATM is generated for a series of related datasets that
+        have the same result base.
+    &#34;&#34;&#34;
+    error = self.error
+
+    if error:
+        self.console(&#34;Cannot run because of an earlier error&#34;)
+        return
+
+    cfg = self.cfg
+    extra = cfg.extra
+    hyphenation = self.hyphenation
+    maxNodePlus = self.maxNodePlus
+    maxSlotPlus = self.maxSlotPlus
+    excludedNodes = self.excludedNodes
+
+    # text files
+
+    silent = self.silent
+    prod = self.prod
+    app = self.app
+    texts = self.texts
+    annos = self.annos
+    annosInherited = self.annosInherited
+    waFromTF = self.waFromTF
+    asTsv = self.asTsv
+
+    baseDir = self.repoLocation
+    relative = app.context.relative
+    version = app.version
+
+    console(&#34;\tWriting WATM ...&#34;)
+
+    match = REL_RE.match(relative)
+    (headPart, tailPart) = match.group(1, 2)
+    tailPart1 = f&#34;/{tailPart}&#34; if tailPart else &#34;&#34;
+
+    resultVersionDir = (
+        getResultDir(baseDir, headPart, version, prod, silent)
+        if resultVersion is None
+        else resultVersion
+    )
+
+    resultDir = f&#34;{resultVersionDir}{tailPart1}&#34;
+
+    self.resultDir = resultDir
+
+    initTree(resultDir, fresh=True)
+
+    total = 0
+
+    ext = &#34;tsv&#34; if asTsv else &#34;json&#34;
+
+    j = 0
+    cr = &#34;&#34;
+    nl = True
+
+    for ti, text in texts.items():
+        j += 1
+
+        if j &gt; PROGRESS_LIMIT:
+            cr = &#34;\r&#34;
+            nl = False
+
+        textFile = f&#34;{resultDir}/text-{ti}.{ext}&#34;
+        nText = len(text)
+        total += nText
+
+        with fileOpen(textFile, &#34;w&#34;) as fh:
+            if asTsv:
+                fh.write(&#34;token\n&#34;)
+                for t in text:
+                    fh.write(t.replace(&#34;\t&#34;, &#34;\\t&#34;).replace(&#34;\n&#34;, &#34;\\n&#34;) + &#34;\n&#34;)
+            else:
+                writeJson(dict(_ordered_segments=text), asFile=fh)
+
+        self.console(
+            f&#34;{cr}Text file {ti:&gt;4}: {nText:&gt;8} segments to {textFile}&#34;,
+            newline=nl,
+        )
+
+    nTexts = len(texts)
+    sep = &#34;&#34; if nTexts == 1 else &#34;s&#34;
+
+    self.console(&#34;&#34;)
+    console(f&#34;Text files all: {total:&gt;8} segments to {nTexts} file{sep}&#34;)
+
+    # annotation files
+
+    annoStore = {}
+
+    for kind, aId, ns, body, target in annos:
+        annoStore[aId] = (kind, ns, body, target)
+
+    aIdSorted = sorted(annoStore.keys())
+
+    thisAnnoStore = {}
+    thisA = 1
+    nAnnoFiles = 0
+
+    LIMIT = 400000
+    j = 0
+    total = 0
+
+    def writeThis():
+        annoFile = f&#34;{resultDir}/anno-{thisA:&gt;01}.{ext}&#34;
+
+        with fileOpen(annoFile, &#34;w&#34;) as fh:
+            if asTsv:
+                fh.write(&#34;annoid\tkind\tnamespace\tbody\ttarget\n&#34;)
+
+                for aId, (kind, namespace, body, target) in thisAnnoStore.items():
+                    body = body.replace(&#34;\t&#34;, &#34;\\t&#34;).replace(&#34;\n&#34;, &#34;\\n&#34;)
+                    fh.write(f&#34;{aId}\t{kind}\t{namespace}\t{body}\t{target}\n&#34;)
+            else:
+                writeJson(thisAnnoStore, asFile=fh)
+
+        self.console(
+            f&#34;Anno file {thisA:&gt;4}: {j:&gt;8} annotations written to {annoFile}&#34;
+        )
+
+    for aId in aIdSorted:
+        if j &gt;= LIMIT:
+            writeThis()
+            nAnnoFiles += 1
+            thisA += 1
+            thisAnnoStore = {}
+            total += j
+            j = 0
+
+        thisAnnoStore[aId] = annoStore[aId]
+        j += 1
+
+    if len(thisAnnoStore):
+        writeThis()
+        nAnnoFiles += 1
+        total += j
+
+    if len(annoStore) != total:
+        console(f&#34;Sum of batches : {total:&gt;8}&#34;, error=True)
+        console(f&#34;All annotations: {len(annoStore):&gt;8}&#34;, error=True)
+        console(&#34;Mismatch in number of annotations&#34;, error=True)
+
+    inheritedFile = f&#34;{resultDir}/{INHERITED_FILE}&#34;
+
+    with fileOpen(inheritedFile, &#34;w&#34;) as fh:
+        fh.write(&#34;\n&#34;.join(sorted(annosInherited)))
+
+    self.console(f&#34;Inherited annotations: {len(annosInherited)}&#34;)
+
+    sep = &#34;&#34; if nAnnoFiles == 1 else &#34;s&#34;
+    self.console(
+        f&#34;Anno files all: {total:&gt;8} annotations to {nAnnoFiles} file{sep}&#34;
+    )
+
+    # node mapping files
+
+    slotmapFile = f&#34;{resultDir}/{SLOTMAP_FILE}&#34;
+    nodemapFile = f&#34;{resultDir}/{NODEMAP_FILE}&#34;
+
+    with fileOpen(slotmapFile, &#34;w&#34;) as fh:
+        fh.write(&#34;position\tnode\n&#34;)
+        for n in range(1, maxSlotPlus):
+            if n in excludedNodes or n not in waFromTF:
+                continue
+
+            (file, pos) = waFromTF[n]
+            fh.write(f&#34;{file}:{pos}\t{n}\n&#34;)
+
+    with fileOpen(nodemapFile, &#34;w&#34;) as fh:
+        fh.write(&#34;annotation\tnode\n&#34;)
+
+        for n in range(maxSlotPlus, maxNodePlus):
+            if n in excludedNodes or n not in waFromTF:
+                continue
+
+            aId = waFromTF[n]
+            fh.write(f&#34;{aId}\t{n}\n&#34;)
+
+    self.console(f&#34;Slot mapping written to {slotmapFile}&#34;)
+    self.console(f&#34;Node mapping written to {nodemapFile}&#34;)
+
+    # hyphenation information files
+
+    if hyphenation is not None:
+        logicalFile = f&#34;{resultDir}/{LOGICAL_FILE}&#34;
+
+        with fileOpen(logicalFile, &#34;w&#34;) as fh:
+            fh.write(&#34;token1\ttoken2\tstr\n&#34;)
+
+            pairs = self.getLogicalPairs(waFromTF)
+
+            for t1, t2, text in pairs:
+                fh.write(f&#34;{t1}\t{t2}\t{text}\n&#34;)
+
+        self.console(f&#34;Logical pairs ({len(pairs)}) written to {logicalFile}&#34;)
+
+    # extra files
+
+    for extraDir, files in (extra or {}).items():
+        for file in files:
+            fileCopy(f&#34;{baseDir}/{extraDir}/{file}&#34;, f&#34;{resultDir}/{file}&#34;)
+            self.console(
+                f&#34;Extra file {extraDir}/{file} copied to the WATM directory&#34;
+            )</code></pre>
+</details>
 </dd>
 </dl>
 </dd>
@@ -5824,7 +8654,7 @@ See <code><a title="tff.convert.watm.WATM" href="#tff.convert.watm.WATM">WATM</a
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/00b1804a2a0eabefbe45442674c2cdeab9cb62dd/tff/convert/watm.py#L2796-L2946" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L3086-L3236" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class WATMS:
     &#34;&#34;&#34;Export corpora that are divided over multiple TF datasets.
@@ -5987,6 +8817,23 @@ See <code><a title="tff.convert.watm.WATM" href="#tff.convert.watm.WATM">WATM</a
 <div class="desc"><p>Print something to the output.</p>
 <p>This works exactly as <code>tf.core.helpers.console</code></p>
 <p>When the silent member of the object is True, the message will be suppressed.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L3163-L3173" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def console(self, msg, **kwargs):
+    &#34;&#34;&#34;Print something to the output.
+
+    This works exactly as `tf.core.helpers.console`
+
+    When the silent member of the object is True, the message will be suppressed.
+    &#34;&#34;&#34;
+    silent = self.silent
+
+    if not silent:
+        console(msg, **kwargs)</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.watm.WATMS.produce"><code class="name flex">
 <span>def <span class="ident">produce</span></span>(<span>self, doc=None, prod='dev')</span>
@@ -6002,6 +8849,74 @@ Otherwise all datasets will be converted.</dd>
 <dt><strong><code>prod</code></strong> :&ensp;<code>string</code>, optional <code>dev</code></dt>
 <dd>See <code><a title="tff.convert.watm.WATM.writeAll" href="#tff.convert.watm.WATM.writeAll">WATM.writeAll()</a></code></dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/watm.py#L3175-L3236" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def produce(self, doc=None, prod=&#34;dev&#34;):
+    &#34;&#34;&#34;Convert all relevant TF datasets.
+
+    Parameters
+    ----------
+    doc: string, optional None
+        Subdirectory where one of the TF datasets resides.
+        If passed, only this dataset will be converted.
+        Otherwise all datasets will be converted.
+    prod: string, optional dev
+        See `WATM.writeAll`
+    &#34;&#34;&#34;
+    error = self.error
+    silent = self.silent
+
+    if error:
+        self.console(&#34;Cannot run because of an earlier error&#34;)
+        return
+
+    org = self.org
+    repo = self.repo
+    backend = self.backend
+    nsOrig = self.nsOrig
+    skipMeta = self.skipMeta
+    extra = self.extra
+    docs = self.docs
+    silent = self.silent
+    repoDir = self.repoDir
+    tfVersion = self.tfVersion
+
+    chosenDoc = doc
+
+    resultVersion = getResultDir(repoDir, &#34;&#34;, tfVersion, prod, silent)
+
+    good = True
+
+    for doc in sorted(docs, key=lambda x: (x[0], int(x[1:]))):
+        if chosenDoc is not None and chosenDoc != doc:
+            continue
+
+        self.console(f&#34;{doc:&gt;5} ... &#34;, newline=False)
+
+        A = use(
+            f&#34;{org}/{repo}:clone&#34;,
+            relative=f&#34;/tf/{doc}&#34;,
+            checkout=&#34;clone&#34;,
+            backend=backend,
+            silent=DEEP,
+        )
+        WA = WATM(
+            A, nsOrig, skipMeta=skipMeta, extra=extra, silent=silent, prod=prod
+        )
+        WA.makeText()
+        WA.makeAnno()
+        WA.writeAll(resultVersion=resultVersion)
+        WA.testAll(condensed=True)
+
+        if WA.error:
+            good = False
+
+    if not silent or error:
+        console(f&#34;WATM generation: {rep(good)}&#34;, error=not good)</code></pre>
+</details>
 </dd>
 </dl>
 </dd>
@@ -6094,6 +9009,7 @@ setTimeout(() => input.focus(), 100);
 <li><code><a title="tff.convert.watm.getResultDir" href="#tff.convert.watm.getResultDir">getResultDir</a></code></li>
 <li><code><a title="tff.convert.watm.operationalize" href="#tff.convert.watm.operationalize">operationalize</a></code></li>
 <li><code><a title="tff.convert.watm.rep" href="#tff.convert.watm.rep">rep</a></code></li>
+<li><code><a title="tff.convert.watm.showWarnings" href="#tff.convert.watm.showWarnings">showWarnings</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-classes">Classes</a></h3>
@@ -6102,6 +9018,7 @@ setTimeout(() => input.focus(), 100);
 <h4><code><a title="tff.convert.watm.WATM" href="#tff.convert.watm.WATM">WATM</a></code></h4>
 <ul class="two-column">
 <li><code><a title="tff.convert.watm.WATM.console" href="#tff.convert.watm.WATM.console">console</a></code></li>
+<li><code><a title="tff.convert.watm.WATM.getExcluded" href="#tff.convert.watm.WATM.getExcluded">getExcluded</a></code></li>
 <li><code><a title="tff.convert.watm.WATM.getLogicalPairs" href="#tff.convert.watm.WATM.getLogicalPairs">getLogicalPairs</a></code></li>
 <li><code><a title="tff.convert.watm.WATM.makeAnno" href="#tff.convert.watm.WATM.makeAnno">makeAnno</a></code></li>
 <li><code><a title="tff.convert.watm.WATM.makeText" href="#tff.convert.watm.WATM.makeText">makeText</a></code></li>
@@ -6133,7 +9050,7 @@ setTimeout(() => input.focus(), 100);
 <footer id="footer">
 <a href="https://pure.knaw.nl/portal/en/persons/dirk-roorda">Dirk Roorda</a>
 <a href="https://huc.knaw.nl"><img alt="HuC" src="../../tff/images/huc.png" width="200" alt="Humanities Cluster"></a>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.11.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.11.6</a>.</p>
 </footer>
 </body>
 </html>

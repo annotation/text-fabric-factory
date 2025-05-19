@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.11.1" />
+<meta name="generator" content="pdoc 0.11.6" />
 <title>tff.convert.iiif API documentation</title>
 <meta name="description" content="" />
 <!-- integrity SRI from https://cdnjs.com/libraries/10up-sanitize.css/11.0.1 -->
@@ -31,24 +31,32 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/00b1804a2a0eabefbe45442674c2cdeab9cb62dd/tff/convert/iiif.py#L1-L487" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L1-L606" class="git-link">Browse git</a>
 </summary>
-<pre><code class="python">from tf.core.files import (
+<pre><code class="python">import collections
+
+from tf.core.files import (
     writeJson,
     fileOpen,
     fileExists,
+    fileCopy,
     initTree,
+    dirNm,
     dirExists,
     dirRemove,
     dirCopy,
     dirContents,
     stripExt,
+    abspath,
 )
 from tf.core.generic import AttrDict
 from tf.core.helpers import console, readCfg
 from .helpers import getPageInfo, getImageLocations, getImageSizes
 
 DS_STORE = &#34;.DS_Store&#34;
+
+FILE_NOT_FOUND = &#34;filenotfound&#34;
+FILE_NOT_FOUND_SIZES = (480, 640)
 
 
 def fillinIIIF(data, **kwargs):
@@ -75,7 +83,7 @@ def fillinIIIF(data, **kwargs):
     return data
 
 
-def parseIIIF(settings, prod, selector, **kwargs):
+def parseIIIF(settings, prod, selector, locally=False, **kwargs):
     &#34;&#34;&#34;Parse the iiif yml file and deliver a filled in section.
 
     The iiif.yml file contains switches and constants and macros which then are used
@@ -107,12 +115,24 @@ def parseIIIF(settings, prod, selector, **kwargs):
         Additional optional parameters to pass as key value pairs to
         the iiif config file. These values will be filled in for place holders
         of the form `[`*arg*`]`.
+    locally: boolean, optional False
+        If True, assume manifests are generated for usage on a local deployment of the
+        IIIF server.
     &#34;&#34;&#34;
 
     def applySwitches(prod, constants, switches):
         if len(switches):
             for k, v in switches[prod].items():
                 constants[k] = v
+
+            if locally:
+                if prod == &#34;preview&#34;:
+                    if &#34;server&#34; in constants:
+                        previewServer = constants[&#34;server&#34;]
+                        previewServerLocal = switches.get(&#34;dev&#34;, {}).get(
+                            &#34;server&#34;, previewServer
+                        )
+                        constants[&#34;server&#34;] = previewServerLocal
 
         return constants
 
@@ -181,6 +201,7 @@ class IIIF:
         pageInfoDir,
         outputDir=None,
         prod=&#34;dev&#34;,
+        locally=False,
         silent=False,
         **kwargs,
     ):
@@ -203,7 +224,15 @@ class IIIF:
             the top-level of the repo and within that `prod` or `dev` or `preview`
         prod: string, optional dev
             Whether the manifests are for production (`prod`) or development (`dev`)
-            of preview (`preview`)
+            or preview (`preview`)
+            If the value is `preview` we assume that the actual scans are in a IIIF
+            repo, and not within reach of the code here. But we do assume
+            that a sizes file is present in the expected location (in the scanRefDir),
+            and possibly a rotations file.
+        locally: whether we are running on a local machine or on a server;
+            this is only relevant if `prod == &#34;preview&#34;`. In that case, `locally`
+            distinguishes whether we run de preview machinery on a local development
+            computer, or on a server within public-facing infrastructure
         silent: boolean, optional False
             Whether to suppress output messages
         kwargs: dict
@@ -224,15 +253,19 @@ class IIIF:
         F = app.api.F
         L = app.api.L
 
+        myDir = dirNm(abspath(__file__))
+        self.myDir = myDir
+
         locations = getImageLocations(app, prod, silent)
         repoLocation = locations.repoLocation
-        self.scanDir = locations.scanDir
         self.thumbDir = locations.thumbDir
         scanRefDir = locations.scanRefDir
         self.scanRefDir = scanRefDir
         self.coversDir = locations.coversDir
         doCovers = locations.doCovers
         self.doCovers = doCovers
+
+        self.console(f&#34;Scan images taken from {scanRefDir}&#34;)
 
         outputDir = (
             f&#34;{repoLocation}/static{teiVersionRep}/{prod}&#34;
@@ -245,6 +278,9 @@ class IIIF:
         self.pagesDir = f&#34;{scanRefDir}/pages&#34;
         self.logoInDir = f&#34;{scanRefDir}/logo&#34;
         self.logoDir = f&#34;{outputDir}/logo&#34;
+
+        self.miradorHtmlIn = f&#34;{myDir}/mirador.html&#34;
+        self.miradorHtmlOut = f&#34;{outputDir}/mirador.html&#34;
 
         if doCovers:
             self.coversHtmlIn = f&#34;{repoLocation}/programs/covers.html&#34;
@@ -262,7 +298,14 @@ class IIIF:
         console(f&#34;Manifestlevel = {manifestLevel}&#34;)
         self.manifestLevel = manifestLevel
 
-        self.templates = parseIIIF(settings, prod, &#34;templates&#34;, **kwargs)
+        if prod == &#34;preview&#34;:
+            localRep = &#34;the local machine&#34; if locally else &#34;the server&#34;
+            console(f&#34;Generated urls address {localRep}&#34;)
+
+        self.mirador = parseIIIF(settings, prod, &#34;mirador&#34;, locally=locally, **kwargs)
+        self.templates = parseIIIF(
+            settings, prod, &#34;templates&#34;, locally=locally, **kwargs
+        )
 
         folders = (
             [F.folder.v(f) for f in F.otype.s(&#34;folder&#34;)]
@@ -334,7 +377,7 @@ class IIIF:
         doCovers = self.doCovers
         silent = self.silent
 
-        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
+        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent) or {}
 
     def getPageSeq(self):
         if self.error:
@@ -362,13 +405,19 @@ class IIIF:
 
     def genPages(self, kind, folder=None, file=None):
         if self.error:
-            return
+            return (0, 0)
+
+        prod = self.prod
+        settings = self.settings
+        scanRefDir = self.scanRefDir
+        ext = settings.get(&#34;constants&#34;, {}).get(&#34;ext&#34;, &#34;jpg&#34;)
+        missingFiles = self.missingFiles
 
         manifestLevel = self.manifestLevel
-        zoneBased = self.settings.get(&#34;zoneBased&#34;, False)
+        zoneBased = settings.get(&#34;zoneBased&#34;, False)
 
         templates = self.templates
-        sizeInfo = self.sizeInfo[kind]
+        sizeInfo = self.sizeInfo.get(kind, {})
         rotateInfo = None if kind == &#34;covers&#34; else self.rotateInfo
         things = self.pages[kind]
         theseThings = things if folder is None else things.get(folder, None)
@@ -393,13 +442,33 @@ class IIIF:
             nPages += 1
 
             if zoneBased:
-                (p, region) = p
+                if type(p) is str:
+                    (p, region) = (p, &#34;full&#34;)
+                elif len(p) == 0:
+                    (p, region) = (&#34;NA&#34;, &#34;full&#34;)
+                elif len(p) == 1:
+                    (p, region) = (p[0], &#34;full&#34;)
+                else:
+                    (p, region) = p[0:2]
             else:
                 region = &#34;full&#34;
 
-            item = {}
-            w, h = sizeInfo.get(p, (0, 0))
-            rot = 0 if rotateInfo is None else rotateInfo.get(p, 0)
+            if prod == &#34;preview&#34;:
+                scanPresent = p in sizeInfo
+            else:
+                pFile = f&#34;{scanRefDir}/{kind}/{p}.{ext}&#34;
+                scanPresent = fileExists(pFile)
+
+            if scanPresent:
+                w, h = sizeInfo.get(p, (0, 0))
+                rot = 0 if rotateInfo is None else rotateInfo.get(p, 0)
+            else:
+                missingFiles.setdefault(kind, {}).setdefault(
+                    file, collections.Counter()
+                )[p] += 1
+                p = FILE_NOT_FOUND
+                w, h = FILE_NOT_FOUND_SIZES
+                rot = 0
 
             key = (p, w, h, rot)
 
@@ -407,6 +476,17 @@ class IIIF:
                 continue
 
             itemsSeen.add(key)
+
+            if not scanPresent:
+                myDir = self.myDir
+                fof = f&#34;{FILE_NOT_FOUND}.{ext}&#34;
+                fofInPath = f&#34;{myDir}/fof/{fof}&#34;
+                fofOutPath = f&#34;{scanRefDir}/{kind}/{fof}&#34;
+
+                if not fileExists(fofOutPath):
+                    fileCopy(fofInPath, fofOutPath)
+
+            item = {}
 
             for k, v in pageItem.items():
                 v = fillinIIIF(
@@ -453,18 +533,36 @@ class IIIF:
         if self.error:
             return
 
+        # silent = self.silent
+        mirador = self.mirador
         folders = self.folders
         manifestDir = self.manifestDir
         logoInDir = self.logoInDir
         logoDir = self.logoDir
         doCovers = self.doCovers
         manifestLevel = self.manifestLevel
+        pageInfoDir = self.pageInfoDir
 
         prod = self.prod
         settings = self.settings
         server = settings[&#34;switches&#34;][prod][&#34;server&#34;]
 
         initTree(manifestDir, fresh=True)
+
+        miradorHtmlIn = self.miradorHtmlIn
+        miradorHtmlOut = self.miradorHtmlOut
+
+        with fileOpen(miradorHtmlIn) as fh:
+            miradorHtml = fh.read()
+
+        miradorHtml = miradorHtml.replace(&#34;«manifests»&#34;, mirador.manifests)
+        miradorHtml = miradorHtml.replace(&#34;«example»&#34;, mirador.example)
+
+        with fileOpen(miradorHtmlOut, &#34;w&#34;) as fh:
+            fh.write(miradorHtml)
+
+        missingFiles = {}
+        self.missingFiles = missingFiles
 
         if doCovers:
             coversHtmlIn = self.coversHtmlIn
@@ -517,6 +615,27 @@ class IIIF:
         else:
             console(f&#34;Directory with logos not found: {logoInDir}&#34;, error=True)
 
+        if len(missingFiles):
+            console(&#34;Missing image files:&#34;, error=True)
+
+        with fileOpen(f&#34;{pageInfoDir}/facsMissing.tsv&#34;, &#34;w&#34;) as fh:
+            fh.write(&#34;kind\tfile\tpage\tn\n&#34;)
+            nMissing = 0
+
+            for kind, files in missingFiles.items():
+                console(f&#34;\t{kind}:&#34;, error=True)
+
+                for file, pages in files.items():
+                    console(f&#34;\t\t{file}:&#34;, error=True)
+
+                    for page, n in pages.items():
+                        console(f&#34;\t\t\t{n:&gt;3} x {page}&#34;, error=True)
+                        nMissing += n
+
+                        fh.write(f&#34;{kind}\t{file}\t{page}\t{n}\n&#34;)
+
+            console(f&#34;\ttotal occurrences of a missing file: {nMissing}&#34;)
+
         self.console(
             f&#34;{m} IIIF manifests with {i} items for {p} pages generated in {manifestDir}&#34;
         )</code></pre>
@@ -534,9 +653,37 @@ class IIIF:
 </code></dt>
 <dd>
 <div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L27-L48" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def fillinIIIF(data, **kwargs):
+    tpd = type(data)
+
+    if tpd is str:
+        for k, v in kwargs.items():
+            pattern = &#34;{&#34; + k + &#34;}&#34;
+
+            if type(v) is int and data == pattern:
+                data = v
+                break
+            else:
+                data = data.replace(pattern, str(v))
+
+        return data
+
+    if tpd is list:
+        return [fillinIIIF(item, **kwargs) for item in data]
+
+    if tpd is dict:
+        return {k: fillinIIIF(v, **kwargs) for (k, v) in data.items()}
+
+    return data</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.iiif.parseIIIF"><code class="name flex">
-<span>def <span class="ident">parseIIIF</span></span>(<span>settings, prod, selector, **kwargs)</span>
+<span>def <span class="ident">parseIIIF</span></span>(<span>settings, prod, selector, locally=False, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Parse the iiif yml file and deliver a filled in section.</p>
@@ -565,7 +712,124 @@ Which top-level of sections we are going to grab out of the iiif.yml file.</dd>
 <dd>Additional optional parameters to pass as key value pairs to
 the iiif config file. These values will be filled in for place holders
 of the form <code>[</code><em>arg</em><code>]</code>.</dd>
+<dt><strong><code>locally</code></strong> :&ensp;<code>boolean</code>, optional <code>False</code></dt>
+<dd>If True, assume manifests are generated for usage on a local deployment of the
+IIIF server.</dd>
 </dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L51-L158" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def parseIIIF(settings, prod, selector, locally=False, **kwargs):
+    &#34;&#34;&#34;Parse the iiif yml file and deliver a filled in section.
+
+    The iiif.yml file contains switches and constants and macros which then are used
+    to define IIIF things via templates.
+
+    The top-level section `scans` contains instructions to define extra annotations
+    on node types that need to refer to scans.
+    This is only used for WATM generation.
+
+    The top-level section `templates` contains fragments from which manifests can be
+    constructed. This is only used in this module.
+
+    This function fills in the switches, based on the parameter `prod`, then
+    prepares the constants, then prepares the macros, and then uses it all
+    to assemble either the `scans` section or the `templates` section; this
+    choice is based on the parameter `selector`.
+
+    Parameters
+    ----------
+    prod: string
+        Either `prod` or `dev` or `preview`.
+        This determines whether we fill in a production value or a develop value
+        or a preview value for each of the settings mentioned in the `switches`
+        section of the iiif.yml file.
+    selector: string
+        Either `scans` or `templates`.
+        Which top-level of sections we are going to grab out of the iiif.yml file.
+    kwargs: dict
+        Additional optional parameters to pass as key value pairs to
+        the iiif config file. These values will be filled in for place holders
+        of the form `[`*arg*`]`.
+    locally: boolean, optional False
+        If True, assume manifests are generated for usage on a local deployment of the
+        IIIF server.
+    &#34;&#34;&#34;
+
+    def applySwitches(prod, constants, switches):
+        if len(switches):
+            for k, v in switches[prod].items():
+                constants[k] = v
+
+            if locally:
+                if prod == &#34;preview&#34;:
+                    if &#34;server&#34; in constants:
+                        previewServer = constants[&#34;server&#34;]
+                        previewServerLocal = switches.get(&#34;dev&#34;, {}).get(
+                            &#34;server&#34;, previewServer
+                        )
+                        constants[&#34;server&#34;] = previewServerLocal
+
+        return constants
+
+    def substituteConstants(data, macros, constants, kwargs):
+        tpd = type(data)
+
+        if tpd is str:
+            for k, v in macros.items():
+                pattern = f&#34;&lt;{k}&gt;&#34;
+                data = data.replace(pattern, str(v))
+
+            for k, v in constants.items():
+                pattern = f&#34;«{k}»&#34;
+
+                if type(v) is int and data == pattern:
+                    data = v
+                    break
+                else:
+                    data = data.replace(pattern, str(v))
+
+            if type(data) is str:
+                for k, v in kwargs.items():
+                    pattern = f&#34;[{k}]&#34;
+
+                    if type(v) is int and data == pattern:
+                        data = v
+                        break
+                    else:
+                        data = data.replace(pattern, str(v))
+
+            return data
+
+        if tpd is list:
+            return [
+                substituteConstants(item, macros, constants, kwargs) for item in data
+            ]
+
+        if tpd is dict:
+            return {
+                k: substituteConstants(v, macros, constants, kwargs)
+                for (k, v) in data.items()
+            }
+
+        return data
+
+    constants = applySwitches(
+        prod, settings.get(&#34;constants&#34;, {}), settings.get(&#34;switches&#34;, {})
+    )
+    macros = applySwitches(
+        prod, settings.get(&#34;macros&#34;, {}), settings.get(&#34;switches&#34;, {})
+    )
+
+    return AttrDict(
+        {
+            x: substituteConstants(xText, macros, constants, kwargs)
+            for (x, xText) in settings[selector].items()
+        }
+    )</code></pre>
+</details>
 </dd>
 </dl>
 </section>
@@ -574,7 +838,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <dl>
 <dt id="tff.convert.iiif.IIIF"><code class="flex name class">
 <span>class <span class="ident">IIIF</span></span>
-<span>(</span><span>teiVersion, app, pageInfoDir, outputDir=None, prod='dev', silent=False, **kwargs)</span>
+<span>(</span><span>teiVersion, app, pageInfoDir, outputDir=None, prod='dev', locally=False, silent=False, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Class for generating IIIF manifests.</p>
@@ -595,7 +859,15 @@ Otherwise a standard location is chosen: <code>static</code> at
 the top-level of the repo and within that <code>prod</code> or <code>dev</code> or <code>preview</code></dd>
 <dt><strong><code>prod</code></strong> :&ensp;<code>string</code>, optional <code>dev</code></dt>
 <dd>Whether the manifests are for production (<code>prod</code>) or development (<code>dev</code>)
-of preview (<code>preview</code>)</dd>
+or preview (<code>preview</code>)
+If the value is <code>preview</code> we assume that the actual scans are in a IIIF
+repo, and not within reach of the code here. But we do assume
+that a sizes file is present in the expected location (in the scanRefDir),
+and possibly a rotations file.</dd>
+<dt><strong><code>locally</code></strong> :&ensp;<code>whether we are running on a local machine</code> or <code>on a server;</code></dt>
+<dd>this is only relevant if <code>prod == "preview"</code>. In that case, <code>locally</code>
+distinguishes whether we run de preview machinery on a local development
+computer, or on a server within public-facing infrastructure</dd>
 <dt><strong><code>silent</code></strong> :&ensp;<code>boolean</code>, optional <code>False</code></dt>
 <dd>Whether to suppress output messages</dd>
 <dt><strong><code>kwargs</code></strong> :&ensp;<code>dict</code></dt>
@@ -606,7 +878,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/00b1804a2a0eabefbe45442674c2cdeab9cb62dd/tff/convert/iiif.py#L141-L487" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L161-L606" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class IIIF:
     def __init__(
@@ -616,6 +888,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         pageInfoDir,
         outputDir=None,
         prod=&#34;dev&#34;,
+        locally=False,
         silent=False,
         **kwargs,
     ):
@@ -638,7 +911,15 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
             the top-level of the repo and within that `prod` or `dev` or `preview`
         prod: string, optional dev
             Whether the manifests are for production (`prod`) or development (`dev`)
-            of preview (`preview`)
+            or preview (`preview`)
+            If the value is `preview` we assume that the actual scans are in a IIIF
+            repo, and not within reach of the code here. But we do assume
+            that a sizes file is present in the expected location (in the scanRefDir),
+            and possibly a rotations file.
+        locally: whether we are running on a local machine or on a server;
+            this is only relevant if `prod == &#34;preview&#34;`. In that case, `locally`
+            distinguishes whether we run de preview machinery on a local development
+            computer, or on a server within public-facing infrastructure
         silent: boolean, optional False
             Whether to suppress output messages
         kwargs: dict
@@ -659,15 +940,19 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         F = app.api.F
         L = app.api.L
 
+        myDir = dirNm(abspath(__file__))
+        self.myDir = myDir
+
         locations = getImageLocations(app, prod, silent)
         repoLocation = locations.repoLocation
-        self.scanDir = locations.scanDir
         self.thumbDir = locations.thumbDir
         scanRefDir = locations.scanRefDir
         self.scanRefDir = scanRefDir
         self.coversDir = locations.coversDir
         doCovers = locations.doCovers
         self.doCovers = doCovers
+
+        self.console(f&#34;Scan images taken from {scanRefDir}&#34;)
 
         outputDir = (
             f&#34;{repoLocation}/static{teiVersionRep}/{prod}&#34;
@@ -680,6 +965,9 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         self.pagesDir = f&#34;{scanRefDir}/pages&#34;
         self.logoInDir = f&#34;{scanRefDir}/logo&#34;
         self.logoDir = f&#34;{outputDir}/logo&#34;
+
+        self.miradorHtmlIn = f&#34;{myDir}/mirador.html&#34;
+        self.miradorHtmlOut = f&#34;{outputDir}/mirador.html&#34;
 
         if doCovers:
             self.coversHtmlIn = f&#34;{repoLocation}/programs/covers.html&#34;
@@ -697,7 +985,14 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         console(f&#34;Manifestlevel = {manifestLevel}&#34;)
         self.manifestLevel = manifestLevel
 
-        self.templates = parseIIIF(settings, prod, &#34;templates&#34;, **kwargs)
+        if prod == &#34;preview&#34;:
+            localRep = &#34;the local machine&#34; if locally else &#34;the server&#34;
+            console(f&#34;Generated urls address {localRep}&#34;)
+
+        self.mirador = parseIIIF(settings, prod, &#34;mirador&#34;, locally=locally, **kwargs)
+        self.templates = parseIIIF(
+            settings, prod, &#34;templates&#34;, locally=locally, **kwargs
+        )
 
         folders = (
             [F.folder.v(f) for f in F.otype.s(&#34;folder&#34;)]
@@ -769,7 +1064,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         doCovers = self.doCovers
         silent = self.silent
 
-        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent)
+        self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent) or {}
 
     def getPageSeq(self):
         if self.error:
@@ -797,13 +1092,19 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 
     def genPages(self, kind, folder=None, file=None):
         if self.error:
-            return
+            return (0, 0)
+
+        prod = self.prod
+        settings = self.settings
+        scanRefDir = self.scanRefDir
+        ext = settings.get(&#34;constants&#34;, {}).get(&#34;ext&#34;, &#34;jpg&#34;)
+        missingFiles = self.missingFiles
 
         manifestLevel = self.manifestLevel
-        zoneBased = self.settings.get(&#34;zoneBased&#34;, False)
+        zoneBased = settings.get(&#34;zoneBased&#34;, False)
 
         templates = self.templates
-        sizeInfo = self.sizeInfo[kind]
+        sizeInfo = self.sizeInfo.get(kind, {})
         rotateInfo = None if kind == &#34;covers&#34; else self.rotateInfo
         things = self.pages[kind]
         theseThings = things if folder is None else things.get(folder, None)
@@ -828,13 +1129,33 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
             nPages += 1
 
             if zoneBased:
-                (p, region) = p
+                if type(p) is str:
+                    (p, region) = (p, &#34;full&#34;)
+                elif len(p) == 0:
+                    (p, region) = (&#34;NA&#34;, &#34;full&#34;)
+                elif len(p) == 1:
+                    (p, region) = (p[0], &#34;full&#34;)
+                else:
+                    (p, region) = p[0:2]
             else:
                 region = &#34;full&#34;
 
-            item = {}
-            w, h = sizeInfo.get(p, (0, 0))
-            rot = 0 if rotateInfo is None else rotateInfo.get(p, 0)
+            if prod == &#34;preview&#34;:
+                scanPresent = p in sizeInfo
+            else:
+                pFile = f&#34;{scanRefDir}/{kind}/{p}.{ext}&#34;
+                scanPresent = fileExists(pFile)
+
+            if scanPresent:
+                w, h = sizeInfo.get(p, (0, 0))
+                rot = 0 if rotateInfo is None else rotateInfo.get(p, 0)
+            else:
+                missingFiles.setdefault(kind, {}).setdefault(
+                    file, collections.Counter()
+                )[p] += 1
+                p = FILE_NOT_FOUND
+                w, h = FILE_NOT_FOUND_SIZES
+                rot = 0
 
             key = (p, w, h, rot)
 
@@ -842,6 +1163,17 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
                 continue
 
             itemsSeen.add(key)
+
+            if not scanPresent:
+                myDir = self.myDir
+                fof = f&#34;{FILE_NOT_FOUND}.{ext}&#34;
+                fofInPath = f&#34;{myDir}/fof/{fof}&#34;
+                fofOutPath = f&#34;{scanRefDir}/{kind}/{fof}&#34;
+
+                if not fileExists(fofOutPath):
+                    fileCopy(fofInPath, fofOutPath)
+
+            item = {}
 
             for k, v in pageItem.items():
                 v = fillinIIIF(
@@ -888,18 +1220,36 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         if self.error:
             return
 
+        # silent = self.silent
+        mirador = self.mirador
         folders = self.folders
         manifestDir = self.manifestDir
         logoInDir = self.logoInDir
         logoDir = self.logoDir
         doCovers = self.doCovers
         manifestLevel = self.manifestLevel
+        pageInfoDir = self.pageInfoDir
 
         prod = self.prod
         settings = self.settings
         server = settings[&#34;switches&#34;][prod][&#34;server&#34;]
 
         initTree(manifestDir, fresh=True)
+
+        miradorHtmlIn = self.miradorHtmlIn
+        miradorHtmlOut = self.miradorHtmlOut
+
+        with fileOpen(miradorHtmlIn) as fh:
+            miradorHtml = fh.read()
+
+        miradorHtml = miradorHtml.replace(&#34;«manifests»&#34;, mirador.manifests)
+        miradorHtml = miradorHtml.replace(&#34;«example»&#34;, mirador.example)
+
+        with fileOpen(miradorHtmlOut, &#34;w&#34;) as fh:
+            fh.write(miradorHtml)
+
+        missingFiles = {}
+        self.missingFiles = missingFiles
 
         if doCovers:
             coversHtmlIn = self.coversHtmlIn
@@ -952,6 +1302,27 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         else:
             console(f&#34;Directory with logos not found: {logoInDir}&#34;, error=True)
 
+        if len(missingFiles):
+            console(&#34;Missing image files:&#34;, error=True)
+
+        with fileOpen(f&#34;{pageInfoDir}/facsMissing.tsv&#34;, &#34;w&#34;) as fh:
+            fh.write(&#34;kind\tfile\tpage\tn\n&#34;)
+            nMissing = 0
+
+            for kind, files in missingFiles.items():
+                console(f&#34;\t{kind}:&#34;, error=True)
+
+                for file, pages in files.items():
+                    console(f&#34;\t\t{file}:&#34;, error=True)
+
+                    for page, n in pages.items():
+                        console(f&#34;\t\t\t{n:&gt;3} x {page}&#34;, error=True)
+                        nMissing += n
+
+                        fh.write(f&#34;{kind}\t{file}\t{page}\t{n}\n&#34;)
+
+            console(f&#34;\ttotal occurrences of a missing file: {nMissing}&#34;)
+
         self.console(
             f&#34;{m} IIIF manifests with {i} items for {p} pages generated in {manifestDir}&#34;
         )</code></pre>
@@ -965,36 +1336,372 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <div class="desc"><p>Print something to the output.</p>
 <p>This works exactly as <code>tf.core.helpers.console</code></p>
 <p>When the silent member of the object is True, the message will be suppressed.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L302-L312" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def console(self, msg, **kwargs):
+    &#34;&#34;&#34;Print something to the output.
+
+    This works exactly as `tf.core.helpers.console`
+
+    When the silent member of the object is True, the message will be suppressed.
+    &#34;&#34;&#34;
+    silent = self.silent
+
+    if not silent:
+        console(msg, **kwargs)</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.iiif.IIIF.genPages"><code class="name flex">
 <span>def <span class="ident">genPages</span></span>(<span>self, kind, folder=None, file=None)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L371-L495" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def genPages(self, kind, folder=None, file=None):
+    if self.error:
+        return (0, 0)
+
+    prod = self.prod
+    settings = self.settings
+    scanRefDir = self.scanRefDir
+    ext = settings.get(&#34;constants&#34;, {}).get(&#34;ext&#34;, &#34;jpg&#34;)
+    missingFiles = self.missingFiles
+
+    manifestLevel = self.manifestLevel
+    zoneBased = settings.get(&#34;zoneBased&#34;, False)
+
+    templates = self.templates
+    sizeInfo = self.sizeInfo.get(kind, {})
+    rotateInfo = None if kind == &#34;covers&#34; else self.rotateInfo
+    things = self.pages[kind]
+    theseThings = things if folder is None else things.get(folder, None)
+
+    if manifestLevel == &#34;folder&#34;:
+        thesePages = theseThings or []
+    else:
+        thesePages = theseThings if file is None else theseThings.get(file, [])
+
+    if kind == &#34;covers&#34;:
+        folder = &#34;covers&#34;
+
+    pageItem = templates.coverItem if kind == &#34;covers&#34; else templates.pageItem
+
+    itemsSeen = set()
+
+    items = []
+
+    nPages = 0
+
+    for p in thesePages:
+        nPages += 1
+
+        if zoneBased:
+            if type(p) is str:
+                (p, region) = (p, &#34;full&#34;)
+            elif len(p) == 0:
+                (p, region) = (&#34;NA&#34;, &#34;full&#34;)
+            elif len(p) == 1:
+                (p, region) = (p[0], &#34;full&#34;)
+            else:
+                (p, region) = p[0:2]
+        else:
+            region = &#34;full&#34;
+
+        if prod == &#34;preview&#34;:
+            scanPresent = p in sizeInfo
+        else:
+            pFile = f&#34;{scanRefDir}/{kind}/{p}.{ext}&#34;
+            scanPresent = fileExists(pFile)
+
+        if scanPresent:
+            w, h = sizeInfo.get(p, (0, 0))
+            rot = 0 if rotateInfo is None else rotateInfo.get(p, 0)
+        else:
+            missingFiles.setdefault(kind, {}).setdefault(
+                file, collections.Counter()
+            )[p] += 1
+            p = FILE_NOT_FOUND
+            w, h = FILE_NOT_FOUND_SIZES
+            rot = 0
+
+        key = (p, w, h, rot)
+
+        if key in itemsSeen:
+            continue
+
+        itemsSeen.add(key)
+
+        if not scanPresent:
+            myDir = self.myDir
+            fof = f&#34;{FILE_NOT_FOUND}.{ext}&#34;
+            fofInPath = f&#34;{myDir}/fof/{fof}&#34;
+            fofOutPath = f&#34;{scanRefDir}/{kind}/{fof}&#34;
+
+            if not fileExists(fofOutPath):
+                fileCopy(fofInPath, fofOutPath)
+
+        item = {}
+
+        for k, v in pageItem.items():
+            v = fillinIIIF(
+                v,
+                folder=folder,
+                file=file,
+                page=p,
+                region=region,
+                width=w,
+                height=h,
+                rot=rot,
+            )
+            item[k] = v
+
+        items.append(item)
+
+    pageSequence = (
+        templates.coverSequence if kind == &#34;covers&#34; else templates.pageSequence
+    )
+    manifestDir = self.manifestDir
+
+    data = {}
+
+    for k, v in pageSequence.items():
+        v = fillinIIIF(v, folder=folder, file=file)
+        data[k] = v
+
+    data[&#34;items&#34;] = items
+
+    nItems = len(items)
+
+    if nItems:
+        writeJson(
+            data,
+            asFile=(
+                f&#34;{manifestDir}/{folder}.json&#34;
+                if manifestLevel == &#34;folder&#34;
+                else f&#34;{manifestDir}/{folder}/{file}.json&#34;
+            ),
+        )
+    return (nPages, nItems)</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.iiif.IIIF.getPageSeq"><code class="name flex">
 <span>def <span class="ident">getPageSeq</span></span>(<span>self)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L347-L369" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def getPageSeq(self):
+    if self.error:
+        return
+
+    manifestLevel = self.manifestLevel
+    doCovers = self.doCovers
+    zoneBased = self.settings.get(&#34;zoneBased&#34;, False)
+
+    if doCovers:
+        coversDir = self.coversDir
+        covers = sorted(
+            stripExt(f) for f in dirContents(coversDir)[0] if f is not DS_STORE
+        )
+        self.covers = covers
+
+    pageInfoDir = self.pageInfoDir
+
+    pages = getPageInfo(pageInfoDir, zoneBased, manifestLevel)
+
+    if doCovers:
+        pages[&#34;covers&#34;] = covers
+
+    self.pages = pages</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.iiif.IIIF.getRotations"><code class="name flex">
 <span>def <span class="ident">getRotations</span></span>(<span>self)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L314-L335" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def getRotations(self):
+    if self.error:
+        return
+
+    scanRefDir = self.scanRefDir
+
+    rotateFile = f&#34;{scanRefDir}/rotation_pages.tsv&#34;
+
+    rotateInfo = {}
+    self.rotateInfo = rotateInfo
+
+    if not fileExists(rotateFile):
+        console(f&#34;Rotation file not found: {rotateFile}&#34;)
+        return
+
+    with fileOpen(rotateFile) as rh:
+        next(rh)
+        for line in rh:
+            fields = line.rstrip(&#34;\n&#34;).split(&#34;\t&#34;)
+            p = fields[0]
+            rot = int(fields[1])
+            rotateInfo[p] = rot</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.iiif.IIIF.getSizes"><code class="name flex">
 <span>def <span class="ident">getSizes</span></span>(<span>self)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L337-L345" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def getSizes(self):
+    if self.error:
+        return
+
+    scanRefDir = self.scanRefDir
+    doCovers = self.doCovers
+    silent = self.silent
+
+    self.sizeInfo = getImageSizes(scanRefDir, doCovers, silent) or {}</code></pre>
+</details>
 </dd>
 <dt id="tff.convert.iiif.IIIF.manifests"><code class="name flex">
 <span>def <span class="ident">manifests</span></span>(<span>self)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L497-L606" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def manifests(self):
+    if self.error:
+        return
+
+    # silent = self.silent
+    mirador = self.mirador
+    folders = self.folders
+    manifestDir = self.manifestDir
+    logoInDir = self.logoInDir
+    logoDir = self.logoDir
+    doCovers = self.doCovers
+    manifestLevel = self.manifestLevel
+    pageInfoDir = self.pageInfoDir
+
+    prod = self.prod
+    settings = self.settings
+    server = settings[&#34;switches&#34;][prod][&#34;server&#34;]
+
+    initTree(manifestDir, fresh=True)
+
+    miradorHtmlIn = self.miradorHtmlIn
+    miradorHtmlOut = self.miradorHtmlOut
+
+    with fileOpen(miradorHtmlIn) as fh:
+        miradorHtml = fh.read()
+
+    miradorHtml = miradorHtml.replace(&#34;«manifests»&#34;, mirador.manifests)
+    miradorHtml = miradorHtml.replace(&#34;«example»&#34;, mirador.example)
+
+    with fileOpen(miradorHtmlOut, &#34;w&#34;) as fh:
+        fh.write(miradorHtml)
+
+    missingFiles = {}
+    self.missingFiles = missingFiles
+
+    if doCovers:
+        coversHtmlIn = self.coversHtmlIn
+        coversHtmlOut = self.coversHtmlOut
+
+        with fileOpen(coversHtmlIn) as fh:
+            coversHtml = fh.read()
+
+        coversHtml = coversHtml.replace(&#34;«server»&#34;, server)
+
+        with fileOpen(coversHtmlOut, &#34;w&#34;) as fh:
+            fh.write(coversHtml)
+
+        self.genPages(&#34;covers&#34;)
+
+    p = 0
+    i = 0
+    m = 0
+
+    if manifestLevel == &#34;folder&#34;:
+        for folder in folders:
+            (thisP, thisI) = self.genPages(&#34;pages&#34;, folder=folder)
+            p += thisP
+            i += thisI
+
+            if thisI:
+                m += 1
+    else:
+        for folder, files in folders:
+            folderDir = f&#34;{manifestDir}/{folder}&#34;
+            initTree(folderDir, fresh=True, gentle=False)
+
+            folderI = 0
+
+            for file in files:
+                (thisP, thisI) = self.genPages(&#34;pages&#34;, folder=folder, file=file)
+                p += thisP
+                i += thisI
+
+                if thisI:
+                    m += 1
+
+                folderI += thisI
+
+            if folderI == 0:
+                dirRemove(folderDir)
+
+    if dirExists(logoInDir):
+        dirCopy(logoInDir, logoDir)
+    else:
+        console(f&#34;Directory with logos not found: {logoInDir}&#34;, error=True)
+
+    if len(missingFiles):
+        console(&#34;Missing image files:&#34;, error=True)
+
+    with fileOpen(f&#34;{pageInfoDir}/facsMissing.tsv&#34;, &#34;w&#34;) as fh:
+        fh.write(&#34;kind\tfile\tpage\tn\n&#34;)
+        nMissing = 0
+
+        for kind, files in missingFiles.items():
+            console(f&#34;\t{kind}:&#34;, error=True)
+
+            for file, pages in files.items():
+                console(f&#34;\t\t{file}:&#34;, error=True)
+
+                for page, n in pages.items():
+                    console(f&#34;\t\t\t{n:&gt;3} x {page}&#34;, error=True)
+                    nMissing += n
+
+                    fh.write(f&#34;{kind}\t{file}\t{page}\t{n}\n&#34;)
+
+        console(f&#34;\ttotal occurrences of a missing file: {nMissing}&#34;)
+
+    self.console(
+        f&#34;{m} IIIF manifests with {i} items for {p} pages generated in {manifestDir}&#34;
+    )</code></pre>
+</details>
 </dd>
 </dl>
 </dd>
@@ -1090,7 +1797,7 @@ setTimeout(() => input.focus(), 100);
 <footer id="footer">
 <a href="https://pure.knaw.nl/portal/en/persons/dirk-roorda">Dirk Roorda</a>
 <a href="https://huc.knaw.nl"><img alt="HuC" src="../../tff/images/huc.png" width="200" alt="Humanities Cluster"></a>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.11.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.11.6</a>.</p>
 </footer>
 </body>
 </html>
