@@ -401,7 +401,7 @@ def setUp(kind):
             "latest",
         ),
         "validate": (
-            "Whether to validate the XML input (use 1 for validation per file)",
+            "Whether to validate the XML input",
             True,
         ),
     }

@@ -1168,6 +1168,7 @@ class TEI(CheckImport):
 
         self.good = True
         self.severeError = False
+        self.fatalError = False
         self.verbose = verbose
 
         if all(s is None for s in (backend, org, repo, relative)):
@@ -1842,6 +1843,39 @@ class TEI(CheckImport):
             huge_tree=True,
         )
 
+    def parseXML(self, fileName, fileOrText, parser):
+        """Parse an XML source.
+
+        This is not meant to validate the XML, only to parse the XML into elements,
+        attributes, and processing instructions, etc. Validity can be checked by means
+        of `tff.tools.xmlschema.Analysis.validate` as is done in the check task.
+
+        Parameters
+        ----------
+        fileName: indicator of the file name, does not have to be the full path,
+            only used in error messages.
+        fileOrText: string
+            Either the full path of an XML file, or a string of raw XML text.
+        parser: object
+            A configured LXML parser object.
+
+        Returns
+        -------
+        object | void
+            The root of the resulting parse tree if the parsing succeeded, else None.
+            If the parsing failed, a message is written to stderr.
+        """
+        etree = self.etree
+
+        try:
+            tree = etree.parse(fileOrText, parser)
+            result = tree.getroot()
+        except Exception as e:
+            console(f"{fileName}: {str(e)}", error=True)
+            result = None
+
+        return result
+
     def getXML(self):
         """Make an inventory of the TEI source files.
 
@@ -1967,19 +2001,12 @@ class TEI(CheckImport):
         *   `errors.txt`: validation errors
         *   `elements.txt`: element / attribute inventory.
 
-        !!! caution "Thoroughness of validation"
-            If the validate parameter is True, all xml files for the same model will be
-            validated by a single call to the validator. This is fast, but the
+        !!! note "Thoroughness of validation"
+            All xml files for the same model will be validated by a single call
+            to the validator. This is fast, but the
             consequence is that after a fatal error the process terminates without
-            validating the remaining files. So the number of errors can be
-            quite misleading.
-
-            If the validate parameter is the number 1, each file will be individually
-            validated. This will result in much more validation errors, but it is
-            much slower.
-
-            It is recommended to pass `1` when in the initial stages, but as soon as
-            validation is more or less OK, use the value `True`.
+            validating the remaining files. In that case, we'll redo validation
+            for each file separately.
 
         Parameters
         ----------
@@ -2391,9 +2418,7 @@ class TEI(CheckImport):
             nSurfacesNotUsed = sum(
                 len(x.get("surface", [])) for x in facsNotUsed.values()
             )
-            nZonesNotUsed = sum(
-                len(x.get("zone", [])) for x in facsNotUsed.values()
-            )
+            nZonesNotUsed = sum(len(x.get("zone", [])) for x in facsNotUsed.values())
 
             if nFacsNotDeclared:
                 plural = "" if nFacsNotDeclared == 1 else "s"
@@ -2827,13 +2852,11 @@ class TEI(CheckImport):
             facsNotDeclared[xmlPath] = set()
             facsNoId[xmlPath] = collections.Counter()
 
-            try:
-                tree = etree.parse(xmlFullPath, parser)
-            except Exception as e:
-                console(str(e), error=True)
+            root = self.parseXML(xmlPath, xmlFullPath, parser)
+
+            if root is None:
                 return
 
-            root = tree.getroot()
             ids[xmlFile][""] = 1
             analyse(root, analysis, xmlPath)
 
@@ -2871,6 +2894,7 @@ class TEI(CheckImport):
 
         good = True
         severeError = False
+        fatalError = False
 
         for model, xmlPaths in xmlFilesByModel.items():
             if verbose >= 0:
@@ -2892,28 +2916,106 @@ class TEI(CheckImport):
                     continue
 
                 (thisGood, info, theseErrors) = A.validate(
-                    validate,
+                    True,
                     schemaFile,
                     [f"{teiPath}/{xmlPath}" for xmlPath in xmlPaths],
                 )
-                if thisGood is None:  # severe error, validation machinery not good
+                if thisGood == -1:  # severe error, validation machinery not good
                     severeError = True
+
+                elif thisGood is None:
+                    fatalError = True
+
+                    # redo validation for each file separately in order to get all
+                    # fatal errors
+                    console("Fatal error in one of the XML files", error=True)
+
+                    rInfo = [*info]
+                    rTheseErrors = [*theseErrors]
+                    rXmlPaths = [*xmlPaths]
+
+                    iteration = 0
+                    maxIter = 20
+
+                    while True:
+                        iteration += 1
+
+                        if iteration > maxIter:
+                            console(
+                                "Stopped looking for more fatal errors after "
+                                f"{maxIter} iterations",
+                                error=True
+                            )
+                            break
+
+                        fatalPath = None
+
+                        for e in rTheseErrors:
+                            kind = e[4]
+
+                            if kind == "fatal":
+                                (folder, file) = e[0:2]
+                                fatalPath = f"{folder}/{file}"
+
+                        if fatalPath is None:
+                            console("No more fatal errors", error=True)
+                            break
+
+                        console(
+                            "Check for more fatal errors "
+                            f"(iteration {iteration} of up to {maxIter}) "
+                            f"after {fatalPath}",
+                            error=True,
+                        )
+                        newRXmlPaths = []
+
+                        skipping = True
+
+                        for xmlPath in rXmlPaths:
+                            if skipping:
+                                if xmlPath == fatalPath:
+                                    skipping = False
+                            else:
+                                newRXmlPaths.append(xmlPath)
+
+                        if not len(newRXmlPaths):
+                            console("No more files to examine", error=True)
+                            break
+
+                        rXmlPaths = newRXmlPaths
+                        (thisRGood, rInfo, rTheseErrors) = A.validate(
+                            True,
+                            schemaFile,
+                            [f"{teiPath}/{xmlPath}" for xmlPath in rXmlPaths],
+                            verbose=True,
+                        )
+
+                        info.extend(rInfo)
+                        theseErrors.extend(rTheseErrors)
+
+                        if thisRGood is not None:
+                            console("Last fatal error encountered", error=True)
+                            break
 
                 for line in info:
                     if verbose >= 0:
                         console(f"\t\t{line}")
 
+            if severeError:
+                for err in theseErrors:
+                    console(err, error=True)
+
+                self.severeError = True
+                break
+
+            if fatalError:
+                self.fatalError = True
+
             if not thisGood:
                 good = False
 
-                if severeError:
-                    for err in theseErrors:
-                        console(err, error=True)
-
-                    self.severeError = True
-                    break
-
                 errors.extend(theseErrors)
+
                 if not carryon:
                     continue
 
@@ -4537,36 +4639,42 @@ class TEI(CheckImport):
                             if transformFunc is not None:
                                 text = transformFunc(text)
 
-                            tree = etree.parse(text, parser)
-                            root = tree.getroot()
+                            root = self.parseXML(f"{xmlFolder}/{xmlFile}", text, parser)
 
-                            if makeLineElems:
-                                cur[NODE][lineType] = None
-                                cur["inLine"] = False
-                                cur["lineAtts"] = None
+                            if root is None:
+                                console(
+                                    f"{xmlFolder}/{xmlFile}: "
+                                    "skipped because of a parsing error",
+                                    error=True,
+                                )
+                            else:
+                                if makeLineElems:
+                                    cur[NODE][lineType] = None
+                                    cur["inLine"] = False
+                                    cur["lineAtts"] = None
 
-                            if makePageElems:
-                                cur[NODE][pageType] = None
-                                cur["inPage"] = False
-                                cur["pageAtts"] = None
+                                if makePageElems:
+                                    cur[NODE][pageType] = None
+                                    cur["inPage"] = False
+                                    cur["pageAtts"] = None
 
-                            if not tokenAsSlot:
-                                cur[NODE][WORD] = None
+                                if not tokenAsSlot:
+                                    cur[NODE][WORD] = None
 
-                            cur["inHeader"] = False
-                            cur["inNote"] = False
-                            cur[XNEST] = []
-                            cur[TNEST] = []
-                            cur[TSIB] = []
-                            cur["chunkNum"] = 0
-                            cur["prevChunk"] = None
-                            cur["prevWord"] = None
-                            cur["wordStr"] = ""
-                            cur["afterStr"] = ""
-                            cur["afterSpace"] = True
-                            cur["chunkElems"] = set()
+                                cur["inHeader"] = False
+                                cur["inNote"] = False
+                                cur[XNEST] = []
+                                cur[TNEST] = []
+                                cur[TSIB] = []
+                                cur["chunkNum"] = 0
+                                cur["prevChunk"] = None
+                                cur["prevWord"] = None
+                                cur["wordStr"] = ""
+                                cur["afterStr"] = ""
+                                cur["afterSpace"] = True
+                                cur["chunkElems"] = set()
 
-                            walkNode(cv, cur, root)
+                                walkNode(cv, cur, root)
 
                         if not tokenAsSlot:
                             addSlot(cv, cur, None)
@@ -4605,41 +4713,45 @@ class TEI(CheckImport):
                     if transformFunc is not None:
                         text = transformFunc(text)
 
-                    tree = etree.parse(text, parser)
-                    root = tree.getroot()
+                    root = self.parseXML(text, parser)
 
-                    if makeLineElems:
-                        cur[NODE][lineType] = None
-                        cur["inLine"] = False
-                        cur["lineAtts"] = None
+                    if root is None:
+                        console(
+                            f"{xmlFile}: skipped because of a parsing error", error=True
+                        )
+                    else:
+                        if makeLineElems:
+                            cur[NODE][lineType] = None
+                            cur["inLine"] = False
+                            cur["lineAtts"] = None
 
-                    if makePageElems:
-                        cur[NODE][pageType] = None
-                        cur["inPage"] = False
-                        cur["pageAtts"] = None
+                        if makePageElems:
+                            cur[NODE][pageType] = None
+                            cur["inPage"] = False
+                            cur["pageAtts"] = None
 
-                    if not tokenAsSlot:
-                        cur[NODE][WORD] = None
+                        if not tokenAsSlot:
+                            cur[NODE][WORD] = None
 
-                    cur["inHeader"] = False
-                    cur["inNote"] = False
-                    cur[XNEST] = []
-                    cur[TNEST] = []
-                    cur[TSIB] = []
-                    cur["chapterNum"] = 0
-                    cur["chunkPNum"] = 0
-                    cur["chunkONum"] = 0
-                    cur["prevChunk"] = None
-                    cur["prevChapter"] = None
-                    cur["prevWord"] = None
-                    cur["wordStr"] = ""
-                    cur["afterStr"] = ""
-                    cur["afterSpace"] = True
-                    cur["chunkElems"] = set()
-                    cur["chapterElems"] = set()
+                        cur["inHeader"] = False
+                        cur["inNote"] = False
+                        cur[XNEST] = []
+                        cur[TNEST] = []
+                        cur[TSIB] = []
+                        cur["chapterNum"] = 0
+                        cur["chunkPNum"] = 0
+                        cur["chunkONum"] = 0
+                        cur["prevChunk"] = None
+                        cur["prevChapter"] = None
+                        cur["prevWord"] = None
+                        cur["wordStr"] = ""
+                        cur["afterStr"] = ""
+                        cur["afterSpace"] = True
+                        cur["chunkElems"] = set()
+                        cur["chapterElems"] = set()
 
-                    for child in root.iterchildren(tag=etree.Element):
-                        walkNode(cv, cur, child)
+                        for child in root.iterchildren(tag=etree.Element):
+                            walkNode(cv, cur, child)
 
                 if not tokenAsSlot:
                     addSlot(cv, cur, None)
@@ -4692,42 +4804,47 @@ class TEI(CheckImport):
                         if transformFunc is not None:
                             text = transformFunc(text)
 
-                        tree = etree.parse(text, parser)
-                        root = tree.getroot()
+                        root = self.parseXML(text, parser)
 
-                        if makeLineElems:
-                            cur[NODE][lineType] = None
-                            cur["inLine"] = False
-                            cur["lineAtts"] = None
+                        if root is None:
+                            console(
+                                f"{xmlFile}: skipped because of a parsing error",
+                                error=True,
+                            )
+                        else:
+                            if makeLineElems:
+                                cur[NODE][lineType] = None
+                                cur["inLine"] = False
+                                cur["lineAtts"] = None
 
-                        if makePageElems:
-                            cur[NODE][pageType] = None
-                            cur["inPage"] = False
-                            cur["pageAtts"] = None
+                            if makePageElems:
+                                cur[NODE][pageType] = None
+                                cur["inPage"] = False
+                                cur["pageAtts"] = None
 
-                        if not tokenAsSlot:
-                            cur[NODE][WORD] = None
+                            if not tokenAsSlot:
+                                cur[NODE][WORD] = None
 
-                        cur["inHeader"] = False
-                        cur["inNote"] = False
-                        cur[XNEST] = []
-                        cur[TNEST] = []
-                        cur[TSIB] = []
-                        cur["chapterNum"] = 0
-                        cur["chunkPNum"] = 0
-                        cur["chunkONum"] = 0
-                        cur["prevChunk"] = None
-                        cur["prevChapter"] = None
-                        cur["prevWord"] = None
-                        cur["wordStr"] = ""
-                        cur["afterStr"] = ""
-                        cur["afterSpace"] = True
-                        cur["chunkElems"] = set()
-                        cur["chapterElems"] = set()
+                            cur["inHeader"] = False
+                            cur["inNote"] = False
+                            cur[XNEST] = []
+                            cur[TNEST] = []
+                            cur[TSIB] = []
+                            cur["chapterNum"] = 0
+                            cur["chunkPNum"] = 0
+                            cur["chunkONum"] = 0
+                            cur["prevChunk"] = None
+                            cur["prevChapter"] = None
+                            cur["prevWord"] = None
+                            cur["wordStr"] = ""
+                            cur["afterStr"] = ""
+                            cur["afterSpace"] = True
+                            cur["chunkElems"] = set()
+                            cur["chapterElems"] = set()
 
-                        walkNode(cv, cur, root)
-                        # for child in root.iterchildren(tag=etree.Element):
-                        #     walkNode(cv, cur, child)
+                            walkNode(cv, cur, root)
+                            # for child in parseResult.iterchildren(tag=etree.Element):
+                            #     walkNode(cv, cur, child)
 
                     if not tokenAsSlot:
                         addSlot(cv, cur, None)

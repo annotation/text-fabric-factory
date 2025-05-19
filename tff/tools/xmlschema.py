@@ -751,7 +751,7 @@ class Analysis(CheckImport):
 
         return None if severeError else good
 
-    def validate(self, mode, schema, instances):
+    def validate(self, mode, schema, instances, verbose=False):
         """Validates an instance against a schema.
 
         Parameters
@@ -767,16 +767,29 @@ class Analysis(CheckImport):
         Returns
         -------
         tuple
-            A boolean or None, telling the success of validaiton. None means that
-            validation did not occur; False that it happened and the result
-            was: not valid; True that it happend and the input was valid.
+            A boolean or None, telling the success of validaiton.
+
+            `-1` means that validation did not occur because the validation
+            machinery could not be started.
+
+            `None` means that it happened but there was a fatal error,
+            such as an unwell-formedness in the XML.
+
+            `False` means that it happened and the XML is well-formed, but is not valid
+            w.r.t. the schema in question.
+
+            `True` means that it the validation completed and found the XML input to
+            be valid.
         """
         myDir = self.myDir
-        verbose = self.verbose
+
+        if verbose is None:
+            verbose = self.verbose
 
         jing = f"{myDir}/jing/jing.jar"
 
         severeError = False
+        fatalError = False
 
         if type(mode) is int and mode == 1:
             good = True
@@ -785,7 +798,7 @@ class Analysis(CheckImport):
             for instance in instances:
                 if verbose:
                     instanceName = instance.rsplit("/", 1)[-1]
-                    console(f"\r\t\t{instanceName:<40} ...", newline=False)
+                    console(f"\t\t{instanceName:<40} ...", newline=True)
 
                 (thisGood, returnCode, stdOut, stdErr) = run(
                     f"""java -jar {jing} -t "{schema}" "{instance}" """,
@@ -816,7 +829,7 @@ class Analysis(CheckImport):
             outputLines = (stdOut + stdErr).strip().split("\n")
 
         if severeError:
-            return (None, stdOut.strip().split("\n"), stdErr.strip().split("\n"))
+            return (-1, stdOut.strip().split("\n"), stdErr.strip().split("\n"))
 
         info = []
         errors = []
@@ -847,6 +860,12 @@ class Analysis(CheckImport):
                     else (*fileComps[0:2], None) if len(fileComps) == 2 else fileComps
                 )
                 errors.append((folder, file, line, col, kind, text))
+
+                if kind == "fatal":
+                    fatalError = True
+
+        if fatalError:
+            good = None
 
         return (good, info, errors)
 
@@ -1028,7 +1047,8 @@ class Analysis(CheckImport):
             baseSchema = args[0]
             docFiles = args[1:]
             (good, stdOut, stdErr) = self.validate(baseSchema, docFiles)
-            if verbose >= 0 or not good:
+
+            if verbose >= 0 or good == -1 or not good:
                 console("STDOUT")
                 console(stdOut)
                 console("STDERR")
