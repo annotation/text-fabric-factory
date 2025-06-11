@@ -31,7 +31,7 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/iiif.py#L1-L638" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L1-L641" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">import collections
 
@@ -46,6 +46,7 @@ from tf.core.files import (
     dirRemove,
     dirCopy,
     dirContents,
+    dirMake,
     stripExt,
     abspath,
 )
@@ -513,9 +514,11 @@ class IIIF:
                 myDir = self.myDir
                 fof = f&#34;{FILE_NOT_FOUND}.{ext}&#34;
                 fofInPath = f&#34;{myDir}/fof/{fof}&#34;
-                fofOutPath = f&#34;{scanRefDir}/{kind}/{fof}&#34;
+                fofOutDir = f&#34;{scanRefDir}/{kind}&#34;
+                fofOutPath = f&#34;{fofOutDir}/{fof}&#34;
 
                 if not fileExists(fofOutPath):
+                    dirMake(fofOutDir)
                     fileCopy(fofInPath, fofOutPath)
 
             item = {}
@@ -688,7 +691,7 @@ class IIIF:
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/iiif.py#L27-L48" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L28-L49" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def fillinIIIF(data, **kwargs):
     tpd = type(data)
@@ -751,7 +754,7 @@ IIIF server.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/iiif.py#L51-L158" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L52-L159" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def parseIIIF(settings, prod, selector, locally=False, **kwargs):
     &#34;&#34;&#34;Parse the iiif yml file and deliver a filled in section.
@@ -910,7 +913,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/iiif.py#L161-L638" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L162-L641" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class IIIF:
     def __init__(
@@ -1232,9 +1235,11 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
                 myDir = self.myDir
                 fof = f&#34;{FILE_NOT_FOUND}.{ext}&#34;
                 fofInPath = f&#34;{myDir}/fof/{fof}&#34;
-                fofOutPath = f&#34;{scanRefDir}/{kind}/{fof}&#34;
+                fofOutDir = f&#34;{scanRefDir}/{kind}&#34;
+                fofOutPath = f&#34;{fofOutDir}/{fof}&#34;
 
                 if not fileExists(fofOutPath):
+                    dirMake(fofOutDir)
                     fileCopy(fofInPath, fofOutPath)
 
             item = {}
@@ -1403,7 +1408,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/iiif.py#L332-L342" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L333-L343" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def console(self, msg, **kwargs):
     &#34;&#34;&#34;Print something to the output.
@@ -1426,7 +1431,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/iiif.py#L401-L527" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L402-L530" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def genPages(self, kind, folder=None, file=None):
     if self.error:
@@ -1508,9 +1513,11 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
             myDir = self.myDir
             fof = f&#34;{FILE_NOT_FOUND}.{ext}&#34;
             fofInPath = f&#34;{myDir}/fof/{fof}&#34;
-            fofOutPath = f&#34;{scanRefDir}/{kind}/{fof}&#34;
+            fofOutDir = f&#34;{scanRefDir}/{kind}&#34;
+            fofOutPath = f&#34;{fofOutDir}/{fof}&#34;
 
             if not fileExists(fofOutPath):
+                dirMake(fofOutDir)
                 fileCopy(fofInPath, fofOutPath)
 
         item = {}
@@ -1565,7 +1572,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/iiif.py#L377-L399" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L378-L400" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getPageSeq(self):
     if self.error:
@@ -1600,7 +1607,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/iiif.py#L344-L365" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L345-L366" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getRotations(self):
     if self.error:
@@ -1634,7 +1641,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/iiif.py#L367-L375" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L368-L376" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getSizes(self):
     if self.error:
@@ -1655,7 +1662,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/iiif.py#L529-L638" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L532-L641" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def manifests(self):
     if self.error:

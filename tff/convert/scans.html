@@ -31,7 +31,7 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/scans.py#L1-L275" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/scans.py#L1-L297" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">from subprocess import run
 
@@ -43,7 +43,9 @@ from tf.core.files import (
     dirExists,
     dirRemove,
     dirCopy,
+    dirMake,
     fileExists,
+    fileCopy,
     extNm,
     fileRemove,
 )
@@ -55,6 +57,7 @@ from .iiif import FILE_NOT_FOUND
 LOGO = &#34;logo&#34;
 PAGES = &#34;pages&#34;
 SCANS = &#34;scans&#34;
+SCANINFO = &#34;scanInfo&#34;
 THUMB = &#34;thumb&#34;
 SCAN_COMMAND = &#34;/opt/homebrew/bin/magick&#34;
 SIZES_COMMAND = &#34;/opt/homebrew/bin/identify&#34;
@@ -129,11 +132,13 @@ class Scans:
         self.settings = settings
 
         scanDir = f&#34;{sourceRefDir}/{SCANS}&#34;
+        scanInfoDir = f&#34;{sourceRefDir}/{SCANINFO}&#34;
         thumbDir = f&#34;{sourceRefDir}/{THUMB}&#34;
         pageInDir = f&#34;{scanDir}/{PAGES}&#34;
         logoInDir = f&#34;{scanDir}/{LOGO}&#34;
 
         self.scanDir = scanDir
+        self.scanInfoDir = scanInfoDir
         self.thumbDir = thumbDir
         self.pageInDir = pageInDir
         self.logoInDir = logoInDir
@@ -150,6 +155,7 @@ class Scans:
 
         verbose = self.verbose
         scanDir = self.scanDir
+        scanInfoDir = self.scanInfoDir
         thumbDir = self.thumbDir
         logoInDir = self.logoInDir
 
@@ -162,8 +168,18 @@ class Scans:
         srcDir = f&#34;{scanDir}/{PAGES}&#34;
         dstDir = f&#34;{thumbDir}/{PAGES}&#34;
         thumbLogoDir = f&#34;{thumbDir}/{LOGO}&#34;
+        scanInfoLogoDir = f&#34;{scanInfoDir}/{LOGO}&#34;
         sizesFileThumb = f&#34;{thumbDir}/sizes_{PAGES}.tsv&#34;
         sizesFileScans = f&#34;{scanDir}/sizes_{PAGES}.tsv&#34;
+        sizesFileScanInfo = f&#34;{scanInfoDir}/sizes_{PAGES}.tsv&#34;
+
+        if force or not dirExists(scanInfoDir):
+            dirRemove(scanInfoDir)
+            dirMake(scanInfoDir)
+            dirCopy(logoInDir, scanInfoLogoDir)
+            console(&#34;Initialized scanInfo dir&#34;)
+        else:
+            console(&#34;scanInfo dir already present&#34;)
 
         if force or not dirExists(thumbLogoDir):
             dirRemove(thumbLogoDir)
@@ -186,6 +202,12 @@ class Scans:
         else:
             if verbose == 1:
                 console(f&#34;Already present: sizes file {plabel} ({PAGES})&#34;)
+
+        if force or not fileExists(sizesFileScanInfo):
+            fileCopy(sizesFileScans, sizesFileScanInfo)
+            console(&#34;Copied sizes file to scanInfo&#34;)
+        else:
+            console(&#34;sizes file already present in scanInfo&#34;)
 
         for folder, label, ext in (
             (srcDir, plabel, scanExt.orig),
@@ -341,7 +363,7 @@ with this parameter.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/scans.py#L31-L275" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/scans.py#L34-L297" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class Scans:
     def __init__(
@@ -409,11 +431,13 @@ with this parameter.</dd>
         self.settings = settings
 
         scanDir = f&#34;{sourceRefDir}/{SCANS}&#34;
+        scanInfoDir = f&#34;{sourceRefDir}/{SCANINFO}&#34;
         thumbDir = f&#34;{sourceRefDir}/{THUMB}&#34;
         pageInDir = f&#34;{scanDir}/{PAGES}&#34;
         logoInDir = f&#34;{scanDir}/{LOGO}&#34;
 
         self.scanDir = scanDir
+        self.scanInfoDir = scanInfoDir
         self.thumbDir = thumbDir
         self.pageInDir = pageInDir
         self.logoInDir = logoInDir
@@ -430,6 +454,7 @@ with this parameter.</dd>
 
         verbose = self.verbose
         scanDir = self.scanDir
+        scanInfoDir = self.scanInfoDir
         thumbDir = self.thumbDir
         logoInDir = self.logoInDir
 
@@ -442,8 +467,18 @@ with this parameter.</dd>
         srcDir = f&#34;{scanDir}/{PAGES}&#34;
         dstDir = f&#34;{thumbDir}/{PAGES}&#34;
         thumbLogoDir = f&#34;{thumbDir}/{LOGO}&#34;
+        scanInfoLogoDir = f&#34;{scanInfoDir}/{LOGO}&#34;
         sizesFileThumb = f&#34;{thumbDir}/sizes_{PAGES}.tsv&#34;
         sizesFileScans = f&#34;{scanDir}/sizes_{PAGES}.tsv&#34;
+        sizesFileScanInfo = f&#34;{scanInfoDir}/sizes_{PAGES}.tsv&#34;
+
+        if force or not dirExists(scanInfoDir):
+            dirRemove(scanInfoDir)
+            dirMake(scanInfoDir)
+            dirCopy(logoInDir, scanInfoLogoDir)
+            console(&#34;Initialized scanInfo dir&#34;)
+        else:
+            console(&#34;scanInfo dir already present&#34;)
 
         if force or not dirExists(thumbLogoDir):
             dirRemove(thumbLogoDir)
@@ -466,6 +501,12 @@ with this parameter.</dd>
         else:
             if verbose == 1:
                 console(f&#34;Already present: sizes file {plabel} ({PAGES})&#34;)
+
+        if force or not fileExists(sizesFileScanInfo):
+            fileCopy(sizesFileScans, sizesFileScanInfo)
+            console(&#34;Copied sizes file to scanInfo&#34;)
+        else:
+            console(&#34;sizes file already present in scanInfo&#34;)
 
         for folder, label, ext in (
             (srcDir, plabel, scanExt.orig),
@@ -599,7 +640,7 @@ with this parameter.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/scans.py#L168-L225" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/scans.py#L190-L247" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def doSizes(self, imDir, ext, sizesFile, label):
     if not self.good:
@@ -669,7 +710,7 @@ with this parameter.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/scans.py#L227-L275" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/scans.py#L249-L297" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def doThumb(self, fromDir, toDir, extIn, extOut, plabel, dlabel):
     if not self.good:
@@ -730,7 +771,7 @@ with this parameter.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/0e2a8661cd1a2a78cc05d728234eec704260ba62/tff/convert/scans.py#L109-L166" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/scans.py#L114-L188" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def process(self, force=False):
     if not self.good:
@@ -741,6 +782,7 @@ with this parameter.</dd>
 
     verbose = self.verbose
     scanDir = self.scanDir
+    scanInfoDir = self.scanInfoDir
     thumbDir = self.thumbDir
     logoInDir = self.logoInDir
 
@@ -753,8 +795,18 @@ with this parameter.</dd>
     srcDir = f&#34;{scanDir}/{PAGES}&#34;
     dstDir = f&#34;{thumbDir}/{PAGES}&#34;
     thumbLogoDir = f&#34;{thumbDir}/{LOGO}&#34;
+    scanInfoLogoDir = f&#34;{scanInfoDir}/{LOGO}&#34;
     sizesFileThumb = f&#34;{thumbDir}/sizes_{PAGES}.tsv&#34;
     sizesFileScans = f&#34;{scanDir}/sizes_{PAGES}.tsv&#34;
+    sizesFileScanInfo = f&#34;{scanInfoDir}/sizes_{PAGES}.tsv&#34;
+
+    if force or not dirExists(scanInfoDir):
+        dirRemove(scanInfoDir)
+        dirMake(scanInfoDir)
+        dirCopy(logoInDir, scanInfoLogoDir)
+        console(&#34;Initialized scanInfo dir&#34;)
+    else:
+        console(&#34;scanInfo dir already present&#34;)
 
     if force or not dirExists(thumbLogoDir):
         dirRemove(thumbLogoDir)
@@ -777,6 +829,12 @@ with this parameter.</dd>
     else:
         if verbose == 1:
             console(f&#34;Already present: sizes file {plabel} ({PAGES})&#34;)
+
+    if force or not fileExists(sizesFileScanInfo):
+        fileCopy(sizesFileScans, sizesFileScanInfo)
+        console(&#34;Copied sizes file to scanInfo&#34;)
+    else:
+        console(&#34;sizes file already present in scanInfo&#34;)
 
     for folder, label, ext in (
         (srcDir, plabel, scanExt.orig),

@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.11.6" />
-<title>tff.about API documentation</title>
-<meta name="description" content="Documents …" />
+<title>tff.tools.helpers API documentation</title>
+<meta name="description" content="" />
 <!-- integrity SRI from https://cdnjs.com/libraries/10up-sanitize.css/11.0.1 -->
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css"
 integrity="sha512-kcbluZFacWN57NgWZ4aH6eUMBEaTyErFhIFD3y5qYZbKuuyImH0K/AKsBbfXlivh2z5C+3IDTIhI11YmKomzmA=="
@@ -25,41 +25,120 @@ crossorigin>
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>tff.about</code></h1>
+<h1 class="title">Module <code>tff.tools.helpers</code></h1>
 </header>
 <section id="section-intro">
-<h1 id="documents">Documents</h1>
-<p>Higher level documentation.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/about/__init__.py#L1-L5" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/tools/helpers.py#L1-L38" class="git-link">Browse git</a>
 </summary>
-<pre><code class="python">&#34;&#34;&#34;
-# Documents
+<pre><code class="python">from subprocess import run as run_cmd, CalledProcessError
 
-Higher level documentation.
-&#34;&#34;&#34;</code></pre>
+
+def runx(cmdline, workDir=None):
+    &#34;&#34;&#34;Runs a shell command and returns all relevant info.
+
+    The function runs a command-line in a shell, and returns
+    whether the command was successful, and also what the output was, separately for
+    standard error and standard output.
+
+    Parameters
+    ----------
+    cmdline: string
+        The command-line to execute.
+    workDir: string, optional None
+        The working directory where the command should be executed.
+        If `None` the current directory is used.
+    &#34;&#34;&#34;
+    try:
+        result = run_cmd(
+            cmdline,
+            shell=False,
+            cwd=workDir,
+            check=True,
+            capture_output=True,
+        )
+        stdOut = result.stdout.decode(&#34;utf8&#34;).strip()
+        stdErr = result.stderr.decode(&#34;utf8&#34;).strip()
+        returnCode = 0
+        good = True
+
+    except CalledProcessError as e:
+        stdOut = e.stdout.decode(&#34;utf8&#34;).strip()
+        stdErr = e.stderr.decode(&#34;utf8&#34;).strip()
+        returnCode = e.returncode
+        good = False
+
+    return (good, returnCode, stdOut, stdErr)</code></pre>
 </details>
 </section>
 <section>
-<h2 class="section-title" id="header-submodules">Sub-modules</h2>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt><code class="name"><a title="tff.about.install" href="install.html">tff.about.install</a></code></dt>
+<dt id="tff.tools.helpers.runx"><code class="name flex">
+<span>def <span class="ident">runx</span></span>(<span>cmdline, workDir=None)</span>
+</code></dt>
 <dd>
-<div class="desc"><p>Install …</p></div>
-</dd>
-<dt><code class="name"><a title="tff.about.releases" href="releases.html">tff.about.releases</a></code></dt>
-<dd>
-<div class="desc"><p>**The TEI converter, the WATM exporter and the IIIF manifest generator are
-still in active development.
-If you need the latest version, clone the …</p></div>
+<div class="desc"><p>Runs a shell command and returns all relevant info.</p>
+<p>The function runs a command-line in a shell, and returns
+whether the command was successful, and also what the output was, separately for
+standard error and standard output.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>cmdline</code></strong> :&ensp;<code>string</code></dt>
+<dd>The command-line to execute.</dd>
+<dt><strong><code>workDir</code></strong> :&ensp;<code>string</code>, optional <code>None</code></dt>
+<dd>The working directory where the command should be executed.
+If <code>None</code> the current directory is used.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/tools/helpers.py#L4-L38" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def runx(cmdline, workDir=None):
+    &#34;&#34;&#34;Runs a shell command and returns all relevant info.
+
+    The function runs a command-line in a shell, and returns
+    whether the command was successful, and also what the output was, separately for
+    standard error and standard output.
+
+    Parameters
+    ----------
+    cmdline: string
+        The command-line to execute.
+    workDir: string, optional None
+        The working directory where the command should be executed.
+        If `None` the current directory is used.
+    &#34;&#34;&#34;
+    try:
+        result = run_cmd(
+            cmdline,
+            shell=False,
+            cwd=workDir,
+            check=True,
+            capture_output=True,
+        )
+        stdOut = result.stdout.decode(&#34;utf8&#34;).strip()
+        stdErr = result.stderr.decode(&#34;utf8&#34;).strip()
+        returnCode = 0
+        good = True
+
+    except CalledProcessError as e:
+        stdOut = e.stdout.decode(&#34;utf8&#34;).strip()
+        stdErr = e.stderr.decode(&#34;utf8&#34;).strip()
+        returnCode = e.returncode
+        good = False
+
+    return (good, returnCode, stdOut, stdErr)</code></pre>
+</details>
 </dd>
 </dl>
-</section>
-<section>
-</section>
-<section>
 </section>
 <section>
 </section>
@@ -118,20 +197,17 @@ setTimeout(() => input.focus(), 100);
 </script>
 <h1>Index</h1>
 <div class="toc">
-<ul>
-<li><a href="#documents">Documents</a></li>
-</ul>
+<ul></ul>
 </div>
 <ul id="index">
 <li><h3>Super-module</h3>
 <ul>
-<li><code><a title="tff" href="../index.html">tff</a></code></li>
+<li><code><a title="tff.tools" href="index.html">tff.tools</a></code></li>
 </ul>
 </li>
-<li><h3><a href="#header-submodules">Sub-modules</a></h3>
-<ul>
-<li><code><a title="tff.about.install" href="install.html">tff.about.install</a></code></li>
-<li><code><a title="tff.about.releases" href="releases.html">tff.about.releases</a></code></li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="tff.tools.helpers.runx" href="#tff.tools.helpers.runx">runx</a></code></li>
 </ul>
 </li>
 </ul>
