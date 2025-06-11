@@ -975,7 +975,6 @@ class WATM:
         self,
         app,
         nsOrig,
-        locally=False,
         pageInfoDir=None,
         skipMeta=False,
         extra={},
@@ -999,10 +998,6 @@ class WATM:
             representation. For example `tei` for a TEI corpus, `pagexml` for a
             PageXML corpus. The namespace is not related to XML namespaces, it is
             merely a device to categorize the resulting annotations.
-        locally: whether we are running on a local machine or on a server;
-            this is only relevant if `prod == "preview"`. In that case, `locally`
-            distinguishes whether we run de preview machinery on a local development
-            computer, or on a server within public-facing infrastructure
         pageInfoDir: string, optional None
             If supplied, extra page information will be looked up from files in this
             directory.
@@ -1083,11 +1078,7 @@ class WATM:
         zoneBased = settings.get("zoneBased", False)
         self.zoneBased = zoneBased
 
-        iiifSettings = (
-            parseIIIF(settings, prod, "scans", locally=locally, **kwargs)
-            if settings
-            else {}
-        )
+        iiifSettings = parseIIIF(settings, prod, "scans", **kwargs) if settings else {}
         (good, self.scanInfo) = operationalize(iiifSettings)
 
         if not good:

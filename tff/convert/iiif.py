@@ -49,7 +49,7 @@ def fillinIIIF(data, **kwargs):
     return data
 
 
-def parseIIIF(settings, prod, selector, locally=False, **kwargs):
+def parseIIIF(settings, prod, selector, **kwargs):
     """Parse the iiif yml file and deliver a filled in section.
 
     The iiif.yml file contains switches and constants and macros which then are used
@@ -81,24 +81,12 @@ def parseIIIF(settings, prod, selector, locally=False, **kwargs):
         Additional optional parameters to pass as key value pairs to
         the iiif config file. These values will be filled in for place holders
         of the form `[`*arg*`]`.
-    locally: boolean, optional False
-        If True, assume manifests are generated for usage on a local deployment of the
-        IIIF server.
     """
 
     def applySwitches(prod, constants, switches):
         if len(switches):
             for k, v in switches[prod].items():
                 constants[k] = v
-
-            if locally:
-                if prod == "preview":
-                    if "server" in constants:
-                        previewServer = constants["server"]
-                        previewServerLocal = switches.get("dev", {}).get(
-                            "server", previewServer
-                        )
-                        constants["server"] = previewServerLocal
 
         return constants
 
@@ -167,7 +155,6 @@ class IIIF:
         pageInfoDir,
         outputDir=None,
         prod="dev",
-        locally=False,
         silent=False,
         **kwargs,
     ):
@@ -195,10 +182,6 @@ class IIIF:
             repo, and not within reach of the code here. But we do assume
             that a sizes file is present in the expected location (in the scanRefDir),
             and possibly a rotations file.
-        locally: whether we are running on a local machine or on a server;
-            this is only relevant if `prod == "preview"`. In that case, `locally`
-            distinguishes whether we run de preview machinery on a local development
-            computer, or on a server within public-facing infrastructure
         silent: boolean, optional False
             Whether to suppress output messages
         kwargs: dict
@@ -264,16 +247,15 @@ class IIIF:
         console(f"Manifestlevel = {manifestLevel}")
         self.manifestLevel = manifestLevel
 
-        if prod == "preview":
-            localRep = "the local machine" if locally else "the server"
-            console(f"Generated urls address {localRep}")
-
         excludedFolders = parseIIIF(settings, prod, "excludedFolders")
         self.excludedFolders = excludedFolders
-        self.mirador = parseIIIF(settings, prod, "mirador", locally=locally, **kwargs)
+        self.mirador = parseIIIF(settings, prod, "mirador", **kwargs)
         self.templates = parseIIIF(
-            settings, prod, "templates", locally=locally, **kwargs
+            settings, prod, "templates", **kwargs
         )
+        switches = parseIIIF(settings, prod, "switches", **kwargs)
+        server = switches[prod]["server"]
+        console(f"All generated urls are for a {prod} deployment on {server}")
 
         folders = (
             [F.folder.v(f) for f in F.otype.s("folder")]
