@@ -1,8 +1,13 @@
+.gitignore
 LICENSE
 MANIFEST.in
 README.md
+cloc_exclude.lst
 pyproject.toml
 setup.cfg
+stats.sh
+statshtml.py
+tffb.py
 text_fabric_factory.egg-info/PKG-INFO
 text_fabric_factory.egg-info/SOURCES.txt
 text_fabric_factory.egg-info/dependency_links.txt
@@ -17,7 +22,9 @@ tff/convert/addnlp.py
 tff/convert/helpers.py
 tff/convert/iiif.py
 tff/convert/makewatm.py
+tff/convert/mirador.html
 tff/convert/pagexml.py
+tff/convert/scans.py
 tff/convert/tei.py
 tff/convert/variants.py
 tff/convert/watm.py

@@ -1,3 +1,4 @@
+include tff/convert/mirador.html *
 recursive-include tff/convert/app *
 recursive-include tff/tools/tei *
 recursive-include tff/tools/trang *

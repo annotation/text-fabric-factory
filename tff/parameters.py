@@ -5,7 +5,7 @@ Fixed values for the whole program.
 """
 
 
-VERSION = '1.0.2'
+VERSION = '1.0.3'
 """Program version.
 
 This value is under control of the update process, as run by
