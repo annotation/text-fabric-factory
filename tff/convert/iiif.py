@@ -11,6 +11,7 @@ from tf.core.files import (
     dirRemove,
     dirCopy,
     dirContents,
+    dirMake,
     stripExt,
     abspath,
 )
@@ -478,9 +479,11 @@ class IIIF:
                 myDir = self.myDir
                 fof = f"{FILE_NOT_FOUND}.{ext}"
                 fofInPath = f"{myDir}/fof/{fof}"
-                fofOutPath = f"{scanRefDir}/{kind}/{fof}"
+                fofOutDir = f"{scanRefDir}/{kind}"
+                fofOutPath = f"{fofOutDir}/{fof}"
 
                 if not fileExists(fofOutPath):
+                    dirMake(fofOutDir)
                     fileCopy(fofInPath, fofOutPath)
 
             item = {}

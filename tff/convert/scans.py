@@ -8,7 +8,9 @@ from tf.core.files import (
     dirExists,
     dirRemove,
     dirCopy,
+    dirMake,
     fileExists,
+    fileCopy,
     extNm,
     fileRemove,
 )
@@ -20,6 +22,7 @@ from .iiif import FILE_NOT_FOUND
 LOGO = "logo"
 PAGES = "pages"
 SCANS = "scans"
+SCANINFO = "scanInfo"
 THUMB = "thumb"
 SCAN_COMMAND = "/opt/homebrew/bin/magick"
 SIZES_COMMAND = "/opt/homebrew/bin/identify"
@@ -94,11 +97,13 @@ class Scans:
         self.settings = settings
 
         scanDir = f"{sourceRefDir}/{SCANS}"
+        scanInfoDir = f"{sourceRefDir}/{SCANINFO}"
         thumbDir = f"{sourceRefDir}/{THUMB}"
         pageInDir = f"{scanDir}/{PAGES}"
         logoInDir = f"{scanDir}/{LOGO}"
 
         self.scanDir = scanDir
+        self.scanInfoDir = scanInfoDir
         self.thumbDir = thumbDir
         self.pageInDir = pageInDir
         self.logoInDir = logoInDir
@@ -115,6 +120,7 @@ class Scans:
 
         verbose = self.verbose
         scanDir = self.scanDir
+        scanInfoDir = self.scanInfoDir
         thumbDir = self.thumbDir
         logoInDir = self.logoInDir
 
@@ -127,8 +133,18 @@ class Scans:
         srcDir = f"{scanDir}/{PAGES}"
         dstDir = f"{thumbDir}/{PAGES}"
         thumbLogoDir = f"{thumbDir}/{LOGO}"
+        scanInfoLogoDir = f"{scanInfoDir}/{LOGO}"
         sizesFileThumb = f"{thumbDir}/sizes_{PAGES}.tsv"
         sizesFileScans = f"{scanDir}/sizes_{PAGES}.tsv"
+        sizesFileScanInfo = f"{scanInfoDir}/sizes_{PAGES}.tsv"
+
+        if force or not dirExists(scanInfoDir):
+            dirRemove(scanInfoDir)
+            dirMake(scanInfoDir)
+            dirCopy(logoInDir, scanInfoLogoDir)
+            console("Initialized scanInfo dir")
+        else:
+            console("scanInfo dir already present")
 
         if force or not dirExists(thumbLogoDir):
             dirRemove(thumbLogoDir)
@@ -151,6 +167,12 @@ class Scans:
         else:
             if verbose == 1:
                 console(f"Already present: sizes file {plabel} ({PAGES})")
+
+        if force or not fileExists(sizesFileScanInfo):
+            fileCopy(sizesFileScans, sizesFileScanInfo)
+            console("Copied sizes file to scanInfo")
+        else:
+            console("sizes file already present in scanInfo")
 
         for folder, label, ext in (
             (srcDir, plabel, scanExt.orig),

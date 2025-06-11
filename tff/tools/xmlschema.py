@@ -114,6 +114,8 @@ from tf.capable import CheckImport
 from tf.core.helpers import console, run
 from tf.core.files import fileOpen, fileExists, fileNm, dirNm, abspath
 
+from .helpers import runx
+
 
 class Elements(CheckImport):
     types = set(
@@ -817,16 +819,20 @@ class Analysis(CheckImport):
                 console("")
 
         elif mode is True:
-            instancesRep = " ".join(f'"{instance}"' for instance in instances)
-            (good, returnCode, stdOut, stdErr) = run(
-                f"""java -jar {jing} -t "{schema}" {instancesRep}""",
+            (good, returnCode, stdOut, stdErr) = runx(
+                ["java", "-jar", jing, "-t", schema, *instances],
                 workDir=None,
             )
+            console(f"VALIDATION RESULT {good=} {returnCode=}")
+
             if not good:
                 if returnCode != 1:
                     severeError = True
 
             outputLines = (stdOut + stdErr).strip().split("\n")
+
+            for line in outputLines:
+                console(line)
 
         if severeError:
             return (-1, stdOut.strip().split("\n"), stdErr.strip().split("\n"))
