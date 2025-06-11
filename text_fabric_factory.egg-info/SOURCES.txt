@@ -41,6 +41,12 @@ tff/convert/app/static/__init__.py
 tff/convert/app/static/display.css
 tff/convert/app/static/logo.png
 tff/convert/app/static/__pycache__/__init__.cpython-313.pyc
+tff/convert/fof/filenotfound.gif
+tff/convert/fof/filenotfound.jpf
+tff/convert/fof/filenotfound.jpg
+tff/convert/fof/filenotfound.pdf
+tff/convert/fof/filenotfound.png
+tff/convert/fof/filenotfound.tiff
 tff/tools/myspacy.py
 tff/tools/xmlschema.py
 tff/tools/jing/copying.html
