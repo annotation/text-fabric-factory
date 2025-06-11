@@ -31,7 +31,7 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L1-L606" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/6e4ee13251a78f834c6f04ad70573d269dba4b87/tff/convert/iiif.py#L1-L638" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">import collections
 
@@ -109,7 +109,7 @@ def parseIIIF(settings, prod, selector, locally=False, **kwargs):
         or a preview value for each of the settings mentioned in the `switches`
         section of the iiif.yml file.
     selector: string
-        Either `scans` or `templates`.
+        Either `scans` or `templates` or `excludedFolders`.
         Which top-level of sections we are going to grab out of the iiif.yml file.
     kwargs: dict
         Additional optional parameters to pass as key value pairs to
@@ -188,7 +188,7 @@ def parseIIIF(settings, prod, selector, locally=False, **kwargs):
     return AttrDict(
         {
             x: substituteConstants(xText, macros, constants, kwargs)
-            for (x, xText) in settings[selector].items()
+            for (x, xText) in settings.get(selector, {}).items()
         }
     )
 
@@ -302,6 +302,8 @@ class IIIF:
             localRep = &#34;the local machine&#34; if locally else &#34;the server&#34;
             console(f&#34;Generated urls address {localRep}&#34;)
 
+        excludedFolders = parseIIIF(settings, prod, &#34;excludedFolders&#34;)
+        self.excludedFolders = excludedFolders
         self.mirador = parseIIIF(settings, prod, &#34;mirador&#34;, locally=locally, **kwargs)
         self.templates = parseIIIF(
             settings, prod, &#34;templates&#34;, locally=locally, **kwargs
@@ -320,19 +322,47 @@ class IIIF:
         self.getRotations()
         self.getPageSeq()
         pages = self.pages
+        properPages = pages.get(&#34;pages&#34;, {})
         self.folders = folders
+        mLevelFolders = manifestLevel == &#34;folder&#34;
 
         self.console(&#34;Collections:&#34;)
 
-        if manifestLevel == &#34;folder&#34;:
-            for folder in folders:
-                n = len(pages[&#34;pages&#34;][folder])
-                self.console(f&#34;{folder:&gt;5} with {n:&gt;4} pages&#34;)
-        else:
-            for folder, files in folders:
-                n = len(pages[&#34;pages&#34;][folder])
-                m = sum(len(x) for x in pages[&#34;pages&#34;][folder].values())
-                self.console(f&#34;{folder:&gt;10} with {n:&gt;4} files and {m:&gt;4} pages&#34;)
+        for item in folders:
+            folder = item if mLevelFolders else item[0]
+
+            n = len(properPages[folder]) if folder in properPages else 0
+            m = (
+                None
+                if mLevelFolders
+                else (
+                    sum(len(x) for x in properPages[folder].values())
+                    if folder in properPages
+                    else 0
+                )
+            )
+
+            nP = n if mLevelFolders else m
+            nF = m if mLevelFolders else n
+
+            pageRep = f&#34;{nP:&gt;4} pages&#34;
+            fileRep = &#34;&#34; if nF is None else f&#34;{nF:&gt;4} files and &#34;
+
+            if excludedFolders.get(folder, False):
+                self.console(
+                    f&#34;{folder:&gt;10} with {fileRep}{pageRep} (excluded in config)&#34;
+                )
+                continue
+
+            if folder not in properPages:
+                console(
+                    f&#34;{folder:&gt;10} with {fileRep}{pageRep} (not excluded in config)&#34;,
+                    error=True,
+                )
+                self.error = True
+                continue
+
+            self.console(f&#34;{folder:&gt;10} with {fileRep}{pageRep}&#34;)
 
     def console(self, msg, **kwargs):
         &#34;&#34;&#34;Print something to the output.
@@ -425,7 +455,9 @@ class IIIF:
         if manifestLevel == &#34;folder&#34;:
             thesePages = theseThings or []
         else:
-            thesePages = theseThings if file is None else theseThings.get(file, [])
+            thesePages = (
+                theseThings if file is None else (theseThings or {}).get(file, [])
+            )
 
         if kind == &#34;covers&#34;:
             folder = &#34;covers&#34;
@@ -656,7 +688,7 @@ class IIIF:
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L27-L48" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/6e4ee13251a78f834c6f04ad70573d269dba4b87/tff/convert/iiif.py#L27-L48" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def fillinIIIF(data, **kwargs):
     tpd = type(data)
@@ -706,7 +738,7 @@ This determines whether we fill in a production value or a develop value
 or a preview value for each of the settings mentioned in the <code>switches</code>
 section of the iiif.yml file.</dd>
 <dt><strong><code>selector</code></strong> :&ensp;<code>string</code></dt>
-<dd>Either <code>scans</code> or <code>templates</code>.
+<dd>Either <code>scans</code> or <code>templates</code> or <code>excludedFolders</code>.
 Which top-level of sections we are going to grab out of the iiif.yml file.</dd>
 <dt><strong><code>kwargs</code></strong> :&ensp;<code>dict</code></dt>
 <dd>Additional optional parameters to pass as key value pairs to
@@ -719,7 +751,7 @@ IIIF server.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L51-L158" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/6e4ee13251a78f834c6f04ad70573d269dba4b87/tff/convert/iiif.py#L51-L158" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def parseIIIF(settings, prod, selector, locally=False, **kwargs):
     &#34;&#34;&#34;Parse the iiif yml file and deliver a filled in section.
@@ -747,7 +779,7 @@ IIIF server.</dd>
         or a preview value for each of the settings mentioned in the `switches`
         section of the iiif.yml file.
     selector: string
-        Either `scans` or `templates`.
+        Either `scans` or `templates` or `excludedFolders`.
         Which top-level of sections we are going to grab out of the iiif.yml file.
     kwargs: dict
         Additional optional parameters to pass as key value pairs to
@@ -826,7 +858,7 @@ IIIF server.</dd>
     return AttrDict(
         {
             x: substituteConstants(xText, macros, constants, kwargs)
-            for (x, xText) in settings[selector].items()
+            for (x, xText) in settings.get(selector, {}).items()
         }
     )</code></pre>
 </details>
@@ -878,7 +910,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L161-L606" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/6e4ee13251a78f834c6f04ad70573d269dba4b87/tff/convert/iiif.py#L161-L638" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class IIIF:
     def __init__(
@@ -989,6 +1021,8 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
             localRep = &#34;the local machine&#34; if locally else &#34;the server&#34;
             console(f&#34;Generated urls address {localRep}&#34;)
 
+        excludedFolders = parseIIIF(settings, prod, &#34;excludedFolders&#34;)
+        self.excludedFolders = excludedFolders
         self.mirador = parseIIIF(settings, prod, &#34;mirador&#34;, locally=locally, **kwargs)
         self.templates = parseIIIF(
             settings, prod, &#34;templates&#34;, locally=locally, **kwargs
@@ -1007,19 +1041,47 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         self.getRotations()
         self.getPageSeq()
         pages = self.pages
+        properPages = pages.get(&#34;pages&#34;, {})
         self.folders = folders
+        mLevelFolders = manifestLevel == &#34;folder&#34;
 
         self.console(&#34;Collections:&#34;)
 
-        if manifestLevel == &#34;folder&#34;:
-            for folder in folders:
-                n = len(pages[&#34;pages&#34;][folder])
-                self.console(f&#34;{folder:&gt;5} with {n:&gt;4} pages&#34;)
-        else:
-            for folder, files in folders:
-                n = len(pages[&#34;pages&#34;][folder])
-                m = sum(len(x) for x in pages[&#34;pages&#34;][folder].values())
-                self.console(f&#34;{folder:&gt;10} with {n:&gt;4} files and {m:&gt;4} pages&#34;)
+        for item in folders:
+            folder = item if mLevelFolders else item[0]
+
+            n = len(properPages[folder]) if folder in properPages else 0
+            m = (
+                None
+                if mLevelFolders
+                else (
+                    sum(len(x) for x in properPages[folder].values())
+                    if folder in properPages
+                    else 0
+                )
+            )
+
+            nP = n if mLevelFolders else m
+            nF = m if mLevelFolders else n
+
+            pageRep = f&#34;{nP:&gt;4} pages&#34;
+            fileRep = &#34;&#34; if nF is None else f&#34;{nF:&gt;4} files and &#34;
+
+            if excludedFolders.get(folder, False):
+                self.console(
+                    f&#34;{folder:&gt;10} with {fileRep}{pageRep} (excluded in config)&#34;
+                )
+                continue
+
+            if folder not in properPages:
+                console(
+                    f&#34;{folder:&gt;10} with {fileRep}{pageRep} (not excluded in config)&#34;,
+                    error=True,
+                )
+                self.error = True
+                continue
+
+            self.console(f&#34;{folder:&gt;10} with {fileRep}{pageRep}&#34;)
 
     def console(self, msg, **kwargs):
         &#34;&#34;&#34;Print something to the output.
@@ -1112,7 +1174,9 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         if manifestLevel == &#34;folder&#34;:
             thesePages = theseThings or []
         else:
-            thesePages = theseThings if file is None else theseThings.get(file, [])
+            thesePages = (
+                theseThings if file is None else (theseThings or {}).get(file, [])
+            )
 
         if kind == &#34;covers&#34;:
             folder = &#34;covers&#34;
@@ -1339,7 +1403,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L302-L312" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/6e4ee13251a78f834c6f04ad70573d269dba4b87/tff/convert/iiif.py#L332-L342" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def console(self, msg, **kwargs):
     &#34;&#34;&#34;Print something to the output.
@@ -1362,7 +1426,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L371-L495" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/6e4ee13251a78f834c6f04ad70573d269dba4b87/tff/convert/iiif.py#L401-L527" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def genPages(self, kind, folder=None, file=None):
     if self.error:
@@ -1386,7 +1450,9 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
     if manifestLevel == &#34;folder&#34;:
         thesePages = theseThings or []
     else:
-        thesePages = theseThings if file is None else theseThings.get(file, [])
+        thesePages = (
+            theseThings if file is None else (theseThings or {}).get(file, [])
+        )
 
     if kind == &#34;covers&#34;:
         folder = &#34;covers&#34;
@@ -1499,7 +1565,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L347-L369" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/6e4ee13251a78f834c6f04ad70573d269dba4b87/tff/convert/iiif.py#L377-L399" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getPageSeq(self):
     if self.error:
@@ -1534,7 +1600,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L314-L335" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/6e4ee13251a78f834c6f04ad70573d269dba4b87/tff/convert/iiif.py#L344-L365" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getRotations(self):
     if self.error:
@@ -1568,7 +1634,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L337-L345" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/6e4ee13251a78f834c6f04ad70573d269dba4b87/tff/convert/iiif.py#L367-L375" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getSizes(self):
     if self.error:
@@ -1589,7 +1655,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/ddcff23ebb87d511c5dfe5430efc202701e33f96/tff/convert/iiif.py#L497-L606" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/6e4ee13251a78f834c6f04ad70573d269dba4b87/tff/convert/iiif.py#L529-L638" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def manifests(self):
     if self.error:
