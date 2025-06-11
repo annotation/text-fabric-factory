@@ -74,7 +74,7 @@ def parseIIIF(settings, prod, selector, locally=False, **kwargs):
         or a preview value for each of the settings mentioned in the `switches`
         section of the iiif.yml file.
     selector: string
-        Either `scans` or `templates`.
+        Either `scans` or `templates` or `excludedFolders`.
         Which top-level of sections we are going to grab out of the iiif.yml file.
     kwargs: dict
         Additional optional parameters to pass as key value pairs to
@@ -153,7 +153,7 @@ def parseIIIF(settings, prod, selector, locally=False, **kwargs):
     return AttrDict(
         {
             x: substituteConstants(xText, macros, constants, kwargs)
-            for (x, xText) in settings[selector].items()
+            for (x, xText) in settings.get(selector, {}).items()
         }
     )
 
@@ -267,6 +267,8 @@ class IIIF:
             localRep = "the local machine" if locally else "the server"
             console(f"Generated urls address {localRep}")
 
+        excludedFolders = parseIIIF(settings, prod, "excludedFolders")
+        self.excludedFolders = excludedFolders
         self.mirador = parseIIIF(settings, prod, "mirador", locally=locally, **kwargs)
         self.templates = parseIIIF(
             settings, prod, "templates", locally=locally, **kwargs
@@ -285,19 +287,47 @@ class IIIF:
         self.getRotations()
         self.getPageSeq()
         pages = self.pages
+        properPages = pages.get("pages", {})
         self.folders = folders
+        mLevelFolders = manifestLevel == "folder"
 
         self.console("Collections:")
 
-        if manifestLevel == "folder":
-            for folder in folders:
-                n = len(pages["pages"][folder])
-                self.console(f"{folder:>5} with {n:>4} pages")
-        else:
-            for folder, files in folders:
-                n = len(pages["pages"][folder])
-                m = sum(len(x) for x in pages["pages"][folder].values())
-                self.console(f"{folder:>10} with {n:>4} files and {m:>4} pages")
+        for item in folders:
+            folder = item if mLevelFolders else item[0]
+
+            n = len(properPages[folder]) if folder in properPages else 0
+            m = (
+                None
+                if mLevelFolders
+                else (
+                    sum(len(x) for x in properPages[folder].values())
+                    if folder in properPages
+                    else 0
+                )
+            )
+
+            nP = n if mLevelFolders else m
+            nF = m if mLevelFolders else n
+
+            pageRep = f"{nP:>4} pages"
+            fileRep = "" if nF is None else f"{nF:>4} files and "
+
+            if excludedFolders.get(folder, False):
+                self.console(
+                    f"{folder:>10} with {fileRep}{pageRep} (excluded in config)"
+                )
+                continue
+
+            if folder not in properPages:
+                console(
+                    f"{folder:>10} with {fileRep}{pageRep} (not excluded in config)",
+                    error=True,
+                )
+                self.error = True
+                continue
+
+            self.console(f"{folder:>10} with {fileRep}{pageRep}")
 
     def console(self, msg, **kwargs):
         """Print something to the output.
@@ -390,7 +420,9 @@ class IIIF:
         if manifestLevel == "folder":
             thesePages = theseThings or []
         else:
-            thesePages = theseThings if file is None else theseThings.get(file, [])
+            thesePages = (
+                theseThings if file is None else (theseThings or {}).get(file, [])
+            )
 
         if kind == "covers":
             folder = "covers"
