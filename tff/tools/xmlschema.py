@@ -823,16 +823,11 @@ class Analysis(CheckImport):
                 ["java", "-jar", jing, "-t", schema, *instances],
                 workDir=None,
             )
-            console(f"VALIDATION RESULT {good=} {returnCode=}")
-
             if not good:
                 if returnCode != 1:
                     severeError = True
 
             outputLines = (stdOut + stdErr).strip().split("\n")
-
-            for line in outputLines:
-                console(line)
 
         if severeError:
             return (-1, stdOut.strip().split("\n"), stdErr.strip().split("\n"))
