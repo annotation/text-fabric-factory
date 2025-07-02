@@ -47,6 +47,7 @@ tff/convert/fof/filenotfound.jpg
 tff/convert/fof/filenotfound.pdf
 tff/convert/fof/filenotfound.png
 tff/convert/fof/filenotfound.tiff
+tff/tools/helpers.py
 tff/tools/myspacy.py
 tff/tools/xmlschema.py
 tff/tools/jing/copying.html

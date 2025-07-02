@@ -3999,6 +3999,7 @@ class TEI(CheckImport):
 
             if empty:
                 lastSlot = addEmpty(cv, cur, "")
+
                 if cur["inNote"]:
                     cv.feature(lastSlot, is_note=1)
             else:
@@ -4013,6 +4014,8 @@ class TEI(CheckImport):
 
         def endPage(cv, cur):
             """Ends a page node.
+
+            If the page node is not linked to a slot, we insert an empty slot.
 
             Parameters
             ----------
@@ -4029,9 +4032,11 @@ class TEI(CheckImport):
             empty = len(slots) == 0
 
             if empty:
+                lastSlot = addEmpty(cv, cur, "")
+
                 if cur["inNote"]:
-                    lastSlot = addEmpty(cv, cur, "")
                     cv.feature(lastSlot, is_note=1)
+
             cv.terminate(cur[NODE][pageType])
             del cur[NODE][pageType]
 
