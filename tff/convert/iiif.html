@@ -31,7 +31,7 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L1-L641" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/d74e5b38be34764b6d1ef21b6da0eb01ddc4686d/tff/convert/iiif.py#L1-L623" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">import collections
 
@@ -84,7 +84,7 @@ def fillinIIIF(data, **kwargs):
     return data
 
 
-def parseIIIF(settings, prod, selector, locally=False, **kwargs):
+def parseIIIF(settings, prod, selector, **kwargs):
     &#34;&#34;&#34;Parse the iiif yml file and deliver a filled in section.
 
     The iiif.yml file contains switches and constants and macros which then are used
@@ -116,24 +116,12 @@ def parseIIIF(settings, prod, selector, locally=False, **kwargs):
         Additional optional parameters to pass as key value pairs to
         the iiif config file. These values will be filled in for place holders
         of the form `[`*arg*`]`.
-    locally: boolean, optional False
-        If True, assume manifests are generated for usage on a local deployment of the
-        IIIF server.
     &#34;&#34;&#34;
 
     def applySwitches(prod, constants, switches):
         if len(switches):
             for k, v in switches[prod].items():
                 constants[k] = v
-
-            if locally:
-                if prod == &#34;preview&#34;:
-                    if &#34;server&#34; in constants:
-                        previewServer = constants[&#34;server&#34;]
-                        previewServerLocal = switches.get(&#34;dev&#34;, {}).get(
-                            &#34;server&#34;, previewServer
-                        )
-                        constants[&#34;server&#34;] = previewServerLocal
 
         return constants
 
@@ -202,7 +190,6 @@ class IIIF:
         pageInfoDir,
         outputDir=None,
         prod=&#34;dev&#34;,
-        locally=False,
         silent=False,
         **kwargs,
     ):
@@ -230,10 +217,6 @@ class IIIF:
             repo, and not within reach of the code here. But we do assume
             that a sizes file is present in the expected location (in the scanRefDir),
             and possibly a rotations file.
-        locally: whether we are running on a local machine or on a server;
-            this is only relevant if `prod == &#34;preview&#34;`. In that case, `locally`
-            distinguishes whether we run de preview machinery on a local development
-            computer, or on a server within public-facing infrastructure
         silent: boolean, optional False
             Whether to suppress output messages
         kwargs: dict
@@ -299,16 +282,15 @@ class IIIF:
         console(f&#34;Manifestlevel = {manifestLevel}&#34;)
         self.manifestLevel = manifestLevel
 
-        if prod == &#34;preview&#34;:
-            localRep = &#34;the local machine&#34; if locally else &#34;the server&#34;
-            console(f&#34;Generated urls address {localRep}&#34;)
-
         excludedFolders = parseIIIF(settings, prod, &#34;excludedFolders&#34;)
         self.excludedFolders = excludedFolders
-        self.mirador = parseIIIF(settings, prod, &#34;mirador&#34;, locally=locally, **kwargs)
+        self.mirador = parseIIIF(settings, prod, &#34;mirador&#34;, **kwargs)
         self.templates = parseIIIF(
-            settings, prod, &#34;templates&#34;, locally=locally, **kwargs
+            settings, prod, &#34;templates&#34;, **kwargs
         )
+        switches = parseIIIF(settings, prod, &#34;switches&#34;, **kwargs)
+        server = switches[prod][&#34;server&#34;]
+        console(f&#34;All generated urls are for a {prod} deployment on {server}&#34;)
 
         folders = (
             [F.folder.v(f) for f in F.otype.s(&#34;folder&#34;)]
@@ -691,7 +673,7 @@ class IIIF:
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L28-L49" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/d74e5b38be34764b6d1ef21b6da0eb01ddc4686d/tff/convert/iiif.py#L28-L49" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def fillinIIIF(data, **kwargs):
     tpd = type(data)
@@ -718,7 +700,7 @@ class IIIF:
 </details>
 </dd>
 <dt id="tff.convert.iiif.parseIIIF"><code class="name flex">
-<span>def <span class="ident">parseIIIF</span></span>(<span>settings, prod, selector, locally=False, **kwargs)</span>
+<span>def <span class="ident">parseIIIF</span></span>(<span>settings, prod, selector, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Parse the iiif yml file and deliver a filled in section.</p>
@@ -747,16 +729,13 @@ Which top-level of sections we are going to grab out of the iiif.yml file.</dd>
 <dd>Additional optional parameters to pass as key value pairs to
 the iiif config file. These values will be filled in for place holders
 of the form <code>[</code><em>arg</em><code>]</code>.</dd>
-<dt><strong><code>locally</code></strong> :&ensp;<code>boolean</code>, optional <code>False</code></dt>
-<dd>If True, assume manifests are generated for usage on a local deployment of the
-IIIF server.</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L52-L159" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/d74e5b38be34764b6d1ef21b6da0eb01ddc4686d/tff/convert/iiif.py#L52-L147" class="git-link">Browse git</a>
 </summary>
-<pre><code class="python">def parseIIIF(settings, prod, selector, locally=False, **kwargs):
+<pre><code class="python">def parseIIIF(settings, prod, selector, **kwargs):
     &#34;&#34;&#34;Parse the iiif yml file and deliver a filled in section.
 
     The iiif.yml file contains switches and constants and macros which then are used
@@ -788,24 +767,12 @@ IIIF server.</dd>
         Additional optional parameters to pass as key value pairs to
         the iiif config file. These values will be filled in for place holders
         of the form `[`*arg*`]`.
-    locally: boolean, optional False
-        If True, assume manifests are generated for usage on a local deployment of the
-        IIIF server.
     &#34;&#34;&#34;
 
     def applySwitches(prod, constants, switches):
         if len(switches):
             for k, v in switches[prod].items():
                 constants[k] = v
-
-            if locally:
-                if prod == &#34;preview&#34;:
-                    if &#34;server&#34; in constants:
-                        previewServer = constants[&#34;server&#34;]
-                        previewServerLocal = switches.get(&#34;dev&#34;, {}).get(
-                            &#34;server&#34;, previewServer
-                        )
-                        constants[&#34;server&#34;] = previewServerLocal
 
         return constants
 
@@ -873,7 +840,7 @@ IIIF server.</dd>
 <dl>
 <dt id="tff.convert.iiif.IIIF"><code class="flex name class">
 <span>class <span class="ident">IIIF</span></span>
-<span>(</span><span>teiVersion, app, pageInfoDir, outputDir=None, prod='dev', locally=False, silent=False, **kwargs)</span>
+<span>(</span><span>teiVersion, app, pageInfoDir, outputDir=None, prod='dev', silent=False, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Class for generating IIIF manifests.</p>
@@ -899,10 +866,6 @@ If the value is <code>preview</code> we assume that the actual scans are in a II
 repo, and not within reach of the code here. But we do assume
 that a sizes file is present in the expected location (in the scanRefDir),
 and possibly a rotations file.</dd>
-<dt><strong><code>locally</code></strong> :&ensp;<code>whether we are running on a local machine</code> or <code>on a server;</code></dt>
-<dd>this is only relevant if <code>prod == "preview"</code>. In that case, <code>locally</code>
-distinguishes whether we run de preview machinery on a local development
-computer, or on a server within public-facing infrastructure</dd>
 <dt><strong><code>silent</code></strong> :&ensp;<code>boolean</code>, optional <code>False</code></dt>
 <dd>Whether to suppress output messages</dd>
 <dt><strong><code>kwargs</code></strong> :&ensp;<code>dict</code></dt>
@@ -913,7 +876,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L162-L641" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/d74e5b38be34764b6d1ef21b6da0eb01ddc4686d/tff/convert/iiif.py#L150-L623" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class IIIF:
     def __init__(
@@ -923,7 +886,6 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         pageInfoDir,
         outputDir=None,
         prod=&#34;dev&#34;,
-        locally=False,
         silent=False,
         **kwargs,
     ):
@@ -951,10 +913,6 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
             repo, and not within reach of the code here. But we do assume
             that a sizes file is present in the expected location (in the scanRefDir),
             and possibly a rotations file.
-        locally: whether we are running on a local machine or on a server;
-            this is only relevant if `prod == &#34;preview&#34;`. In that case, `locally`
-            distinguishes whether we run de preview machinery on a local development
-            computer, or on a server within public-facing infrastructure
         silent: boolean, optional False
             Whether to suppress output messages
         kwargs: dict
@@ -1020,16 +978,15 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         console(f&#34;Manifestlevel = {manifestLevel}&#34;)
         self.manifestLevel = manifestLevel
 
-        if prod == &#34;preview&#34;:
-            localRep = &#34;the local machine&#34; if locally else &#34;the server&#34;
-            console(f&#34;Generated urls address {localRep}&#34;)
-
         excludedFolders = parseIIIF(settings, prod, &#34;excludedFolders&#34;)
         self.excludedFolders = excludedFolders
-        self.mirador = parseIIIF(settings, prod, &#34;mirador&#34;, locally=locally, **kwargs)
+        self.mirador = parseIIIF(settings, prod, &#34;mirador&#34;, **kwargs)
         self.templates = parseIIIF(
-            settings, prod, &#34;templates&#34;, locally=locally, **kwargs
+            settings, prod, &#34;templates&#34;, **kwargs
         )
+        switches = parseIIIF(settings, prod, &#34;switches&#34;, **kwargs)
+        server = switches[prod][&#34;server&#34;]
+        console(f&#34;All generated urls are for a {prod} deployment on {server}&#34;)
 
         folders = (
             [F.folder.v(f) for f in F.otype.s(&#34;folder&#34;)]
@@ -1408,7 +1365,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L333-L343" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/d74e5b38be34764b6d1ef21b6da0eb01ddc4686d/tff/convert/iiif.py#L315-L325" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def console(self, msg, **kwargs):
     &#34;&#34;&#34;Print something to the output.
@@ -1431,7 +1388,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L402-L530" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/d74e5b38be34764b6d1ef21b6da0eb01ddc4686d/tff/convert/iiif.py#L384-L512" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def genPages(self, kind, folder=None, file=None):
     if self.error:
@@ -1572,7 +1529,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L378-L400" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/d74e5b38be34764b6d1ef21b6da0eb01ddc4686d/tff/convert/iiif.py#L360-L382" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getPageSeq(self):
     if self.error:
@@ -1607,7 +1564,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L345-L366" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/d74e5b38be34764b6d1ef21b6da0eb01ddc4686d/tff/convert/iiif.py#L327-L348" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getRotations(self):
     if self.error:
@@ -1641,7 +1598,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L368-L376" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/d74e5b38be34764b6d1ef21b6da0eb01ddc4686d/tff/convert/iiif.py#L350-L358" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getSizes(self):
     if self.error:
@@ -1662,7 +1619,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/398353b12cf9ead5b4a6224e0623f8ab688f92c5/tff/convert/iiif.py#L532-L641" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/d74e5b38be34764b6d1ef21b6da0eb01ddc4686d/tff/convert/iiif.py#L514-L623" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def manifests(self):
     if self.error:
