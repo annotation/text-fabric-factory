@@ -756,7 +756,7 @@ def operationalize(data):
 
         -   `px`: compute absolute pixel values out of percentage values.
             It takes 2 arguments: file name and region specifier.
-            The region specifier has the form `pct:x,y,w,h`. If not
+            The region specifier has the form `pct:x,y,w,h` or `x,y,w,h`. If not
             the result is equal to `full`.
             The file name is the file name of the image, by which the absolute size can
             be retrieved.
@@ -912,7 +912,7 @@ def funcPx(F, L, sizeInfo, facsMissing, feat, otype, node, facsFile, region, war
     if ("pages", facsFile) in facsMissing:
         return "full"
 
-    if region in {"full", "square"}:
+    if region in {"square"}:
         return region
 
     absSize = sizeInfo.get(facsFile, None)
@@ -926,6 +926,9 @@ def funcPx(F, L, sizeInfo, facsMissing, feat, otype, node, facsFile, region, war
         return "full"
 
     absW, absH = absSize
+
+    if region == "full":
+        region = "pct:0,0,100,100"
 
     if region.startswith("pct:"):
         isPct = True
