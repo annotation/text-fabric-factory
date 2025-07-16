@@ -20,7 +20,6 @@ from .iiif import FILE_NOT_FOUND
 
 
 LOGO = "logo"
-PAGES = "pages"
 SCANS = "scans"
 SCANINFO = "scanInfo"
 THUMB = "thumb"
@@ -99,14 +98,10 @@ class Scans:
         scanDir = f"{sourceRefDir}/{SCANS}"
         scanInfoDir = f"{sourceRefDir}/{SCANINFO}"
         thumbDir = f"{sourceRefDir}/{THUMB}"
-        pageInDir = f"{scanDir}/{PAGES}"
-        logoInDir = f"{scanDir}/{LOGO}"
 
         self.scanDir = scanDir
         self.scanInfoDir = scanInfoDir
         self.thumbDir = thumbDir
-        self.pageInDir = pageInDir
-        self.logoInDir = logoInDir
 
         self.verbose = verbose
         self.force = force
@@ -122,7 +117,6 @@ class Scans:
         scanDir = self.scanDir
         scanInfoDir = self.scanInfoDir
         thumbDir = self.thumbDir
-        logoInDir = self.logoInDir
 
         settings = self.settings
         scanExt = settings.scanExt
@@ -130,64 +124,95 @@ class Scans:
         plabel = "originals"
         dlabel = "thumbnails"
 
-        srcDir = f"{scanDir}/{PAGES}"
-        dstDir = f"{thumbDir}/{PAGES}"
-        thumbLogoDir = f"{thumbDir}/{LOGO}"
-        scanInfoLogoDir = f"{scanInfoDir}/{LOGO}"
-        sizesFileThumb = f"{thumbDir}/sizes_{PAGES}.tsv"
-        sizesFileScans = f"{scanDir}/sizes_{PAGES}.tsv"
-        sizesFileScanInfo = f"{scanInfoDir}/sizes_{PAGES}.tsv"
+        for dstDir in (scanInfoDir, thumbDir):
+            if force or not dirExists(dstDir):
+                dirRemove(dstDir)
+                dirMake(dstDir)
 
-        if force or not dirExists(scanInfoDir):
-            dirRemove(scanInfoDir)
-            dirMake(scanInfoDir)
-            dirCopy(logoInDir, scanInfoLogoDir)
-            console("Initialized scanInfo dir")
-        else:
-            console("scanInfo dir already present")
-
-        if force or not dirExists(thumbLogoDir):
-            dirRemove(thumbLogoDir)
-            dirCopy(logoInDir, thumbLogoDir)
-
-        if force or not dirExists(dstDir):
-            self.doThumb(srcDir, dstDir, scanExt.orig, scanExt.thumb, plabel, dlabel)
-        else:
             if verbose == 1:
-                console(f"Already present: {dlabel} ({PAGES})")
+                console(f"Initialized {dstDir}")
+            else:
+                if verbose == 1:
+                    console(f"{dstDir} already present")
 
-        if force or not fileExists(sizesFileThumb):
-            self.doSizes(dstDir, scanExt.thumb, sizesFileThumb, dlabel)
-        else:
-            if verbose == 1:
-                console(f"Already present: sizes file {dlabel} ({PAGES})")
+        (srcFiles, srcSubDirs) = dirContents(scanDir)
 
-        if force or not fileExists(sizesFileScans):
-            self.doSizes(srcDir, scanExt.orig, sizesFileScans, plabel)
-        else:
-            if verbose == 1:
-                console(f"Already present: sizes file {plabel} ({PAGES})")
+        for fl in srcFiles:
+            if fl.startswith("sizes_"):
+                continue
 
-        if force or not fileExists(sizesFileScanInfo):
-            fileCopy(sizesFileScans, sizesFileScanInfo)
-            console("Copied sizes file to scanInfo")
-        else:
-            console("sizes file already present in scanInfo")
+            srcFl = f"{scanDir}/{fl}"
+            dstFl = f"{thumbDir}/{fl}"
+            fileCopy(srcFl, dstFl)
 
-        for folder, label, ext in (
-            (srcDir, plabel, scanExt.orig),
-            (dstDir, dlabel, scanExt.thumb),
-        ):
-            notFound = f"{FILE_NOT_FOUND}.{ext}"
-            files = [
-                f
-                for f in dirContents(folder)[0]
-                if f not in {DS_STORE, notFound} and extNm(f) == ext
-            ]
-            nFiles = len(files)
-            console(f"{label}: {nFiles}")
+            if verbose:
+                console(f"Copied top level file {fl}")
 
-    def doSizes(self, imDir, ext, sizesFile, label):
+        for sbd in srcSubDirs:
+            console(f"{sbd}:")
+
+            srcDir = f"{scanDir}/{sbd}"
+
+            if sbd == LOGO:
+                for dstDir in (f"{thumbDir}/{sbd}", f"{scanInfoDir}/{sbd}"):
+                    if force or not dirExists(dstDir):
+                        dirRemove(dstDir)
+                        dirCopy(srcDir, dstDir)
+
+                        if verbose:
+                            console(f"\tCopied subdirectory {sbd}")
+
+            else:
+                sizesFileThumb = f"{thumbDir}/sizes_{sbd}.tsv"
+                sizesFileScans = f"{scanDir}/sizes_{sbd}.tsv"
+                sizesFileScanInfo = f"{scanInfoDir}/sizes_{sbd}.tsv"
+
+                if force or not dirExists(dstDir):
+                    self.doThumb(
+                        sbd,
+                        srcDir,
+                        dstDir,
+                        scanExt.orig,
+                        scanExt.thumb,
+                        plabel,
+                        dlabel,
+                    )
+                else:
+                    if verbose == 1:
+                        console(f"\tAlready present: {dlabel} ({sbd})")
+
+                if force or not fileExists(sizesFileThumb):
+                    self.doSizes(sbd, dstDir, scanExt.thumb, sizesFileThumb, dlabel)
+                else:
+                    if verbose == 1:
+                        console(f"\tAlready present: sizes file {dlabel} ({sbd})")
+
+                if force or not fileExists(sizesFileScans):
+                    self.doSizes(sbd, srcDir, scanExt.orig, sizesFileScans, plabel)
+                else:
+                    if verbose == 1:
+                        console(f"\tAlready present: sizes file {plabel} ({sbd})")
+
+                if force or not fileExists(sizesFileScanInfo):
+                    fileCopy(sizesFileScans, sizesFileScanInfo)
+                    console(f"\tCopied sizes_{sbd} file to scanInfo")
+                else:
+                    console(f"\tsize_{sbd} file already present in scanInfo")
+
+                for folder, label, ext in (
+                    (srcDir, plabel, scanExt.orig),
+                    (dstDir, dlabel, scanExt.thumb),
+                ):
+                    notFound = f"{FILE_NOT_FOUND}.{ext}"
+                    files = [
+                        f
+                        for f in dirContents(folder)[0]
+                        if f not in {DS_STORE, notFound} and extNm(f) == ext
+                    ]
+                    nFiles = len(files)
+                    console(f"\t{label}: {nFiles}")
+
+    def doSizes(self, sbd, imDir, ext, sizesFile, label):
         if not self.good:
             return
 
@@ -209,7 +234,7 @@ class Scans:
             base = fileName.removesuffix(f".{thisExt}")
             items.append((base, f"{imDir}/{fileName}"))
 
-        console(f"\tGet sizes of {len(items)} {label} ({PAGES})")
+        console(f"\t\tGet sizes of {len(items)} {label} ({sbd})")
         j = 0
         nItems = len(items)
 
@@ -220,7 +245,7 @@ class Scans:
                 perc = int(round(i * 100 / nItems))
 
                 if verbose == 1:
-                    console(f"\t\t{perc:>3}% done")
+                    console(f"\t\t\t{perc:>3}% done")
 
                 j = 0
 
@@ -230,7 +255,7 @@ class Scans:
             j += 1
 
             if status.returncode != 0:
-                console(status.stderr.decode("utf-8"), error=True)
+                console(f"\t{status.stderr.decode('utf-8')}", error=True)
             else:
                 (w, h) = status.stdout.decode("utf-8").strip().split()
                 sizes.append((base, w, h))
@@ -238,7 +263,7 @@ class Scans:
         perc = 100
 
         if verbose == 1:
-            console(f"\t\t{perc:>3}% done")
+            console(f"\t\t\t{perc:>3}% done")
 
         with open(sizesFile, "w") as fh:
             fh.write("file\twidth\theight\n")
@@ -246,7 +271,7 @@ class Scans:
             for file, w, h in sizes:
                 fh.write(f"{file}\t{w}\t{h}\n")
 
-    def doThumb(self, fromDir, toDir, extIn, extOut, plabel, dlabel):
+    def doThumb(self, sbd, fromDir, toDir, extIn, extOut, plabel, dlabel):
         if not self.good:
             return
 
@@ -274,7 +299,7 @@ class Scans:
 
             items.append((base, f"{fromDir}/{fileName}", f"{toDir}/{base}.{extOut}"))
 
-        console(f"\tConvert {len(items)} {plabel} to {dlabel} ({PAGES})")
+        console(f"\tConvert {len(items)} {plabel} to {dlabel} ({sbd})")
 
         j = 0
         nItems = len(items)
