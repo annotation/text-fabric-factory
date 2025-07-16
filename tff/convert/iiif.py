@@ -207,6 +207,7 @@ class IIIF:
 
         locations = getImageLocations(app, prod, silent)
         repoLocation = locations.repoLocation
+        console(f"{repoLocation=}")
         self.thumbDir = locations.thumbDir
         scanRefDir = locations.scanRefDir
         self.scanRefDir = scanRefDir
