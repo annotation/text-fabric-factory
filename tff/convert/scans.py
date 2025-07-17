@@ -24,8 +24,9 @@ SCANS = "scans"
 SCANINFO = "scanInfo"
 THUMB = "thumb"
 SCAN_COMMAND = "/opt/homebrew/bin/magick"
-SIZES_COMMAND = "/opt/homebrew/bin/identify"
+IDENTIFY_COMMAND = "/opt/homebrew/bin/identify"
 SIZES_OPTIONS = ["-ping", "-format", "%w %h"]
+COLORSPACE_OPTIONS = ["-ping", "-format", "%[colorspace]"]
 
 DS_STORE = ".DS_Store"
 
@@ -47,7 +48,7 @@ class Scans:
         ----------
         backend, org, repo, relative: string, optional None
             If all of these are None, these parameters are derived from the
-            currend directory.
+            current directory.
             If one of them is not None, all four of them are taken from the parameters,
             and the current directory is not used to determine them.
         repoDir: string, optional None
@@ -138,7 +139,7 @@ class Scans:
         (srcFiles, srcSubDirs) = dirContents(scanDir)
 
         for fl in srcFiles:
-            if fl.startswith("sizes_"):
+            if fl == DS_STORE or fl.startswith("sizes_"):
                 continue
 
             srcFl = f"{scanDir}/{fl}"
@@ -166,6 +167,8 @@ class Scans:
                 sizesFileThumb = f"{thumbDir}/sizes_{sbd}.tsv"
                 sizesFileScans = f"{scanDir}/sizes_{sbd}.tsv"
                 sizesFileScanInfo = f"{scanInfoDir}/sizes_{sbd}.tsv"
+                colorspacesFileScans = f"{scanDir}/colorspaces_{sbd}.tsv"
+                colorspacesFileScanInfo = f"{scanInfoDir}/colorspaces_{sbd}.tsv"
 
                 if force or not dirExists(dstDir):
                     self.doThumb(
@@ -198,6 +201,21 @@ class Scans:
                     console(f"\tCopied sizes_{sbd} file to scanInfo")
                 else:
                     console(f"\tsize_{sbd} file already present in scanInfo")
+
+                if force or not fileExists(colorspacesFileScans):
+                    self.doColorspaces(
+                        sbd, srcDir, scanExt.orig, colorspacesFileScans, plabel
+                    )
+                else:
+                    if verbose == 1:
+                        console(f"\tAlready present: colorspaces file {plabel} ({sbd})")
+
+                if force or not fileExists(colorspacesFileScanInfo):
+                    self.doColorspaces(
+                        sbd, srcDir, scanExt.orig, colorspacesFileScanInfo, plabel
+                    )
+                else:
+                    console(f"\tcolorspaces_{sbd} file already present in scanInfo")
 
                 for folder, label, ext in (
                     (srcDir, plabel, scanExt.orig),
@@ -250,7 +268,7 @@ class Scans:
                 j = 0
 
             status = run(
-                [SIZES_COMMAND] + SIZES_OPTIONS + [fromFile], capture_output=True
+                [IDENTIFY_COMMAND] + SIZES_OPTIONS + [fromFile], capture_output=True
             )
             j += 1
 
@@ -270,6 +288,66 @@ class Scans:
 
             for file, w, h in sizes:
                 fh.write(f"{file}\t{w}\t{h}\n")
+
+    def doColorspaces(self, sbd, imDir, ext, colorspacesFile, label):
+        if not self.good:
+            return
+
+        verbose = self.verbose
+        fileRemove(colorspacesFile)
+
+        fileNames = dirContents(imDir)[0]
+        items = []
+
+        for fileName in sorted(fileNames):
+            if fileName == DS_STORE:
+                continue
+
+            thisExt = extNm(fileName)
+
+            if thisExt != ext:
+                continue
+
+            base = fileName.removesuffix(f".{thisExt}")
+            items.append((base, f"{imDir}/{fileName}"))
+
+        console(f"\t\tGet colorspaces of {len(items)} {label} ({sbd})")
+        j = 0
+        nItems = len(items)
+
+        colorspaces = []
+
+        for i, (base, fromFile) in enumerate(sorted(items)):
+            if j == 100:
+                perc = int(round(i * 100 / nItems))
+
+                if verbose == 1:
+                    console(f"\t\t\t{perc:>3}% done")
+
+                j = 0
+
+            status = run(
+                [IDENTIFY_COMMAND] + COLORSPACE_OPTIONS + [fromFile],
+                capture_output=True,
+            )
+            j += 1
+
+            if status.returncode != 0:
+                console(f"\t{status.stderr.decode('utf-8')}", error=True)
+            else:
+                colorspace = status.stdout.decode("utf-8").strip()
+                colorspaces.append((base, colorspace))
+
+        perc = 100
+
+        if verbose == 1:
+            console(f"\t\t\t{perc:>3}% done")
+
+        with open(colorspacesFile, "w") as fh:
+            fh.write("file\tcolorspace\n")
+
+            for file, colorspace in colorspaces:
+                fh.write(f"{file}\t{colorspace}\n")
 
     def doThumb(self, sbd, fromDir, toDir, extIn, extOut, plabel, dlabel):
         if not self.good:
