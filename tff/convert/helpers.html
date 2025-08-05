@@ -31,7 +31,7 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/helpers.py#L1-L867" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/helpers.py#L1-L875" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">import re
 from textwrap import dedent
@@ -710,6 +710,7 @@ def lookupSource(cv, cur, tokenAsSlot, specs):
                     (lookForTag, extractAttr) = pieces
                 else:
                     extractAttr = None
+
             ok = compareToTag == lookForTag
 
             if not ok:
@@ -744,9 +745,16 @@ def lookupSource(cv, cur, tokenAsSlot, specs):
                 else &#34;&#34;.join(cv.get(&#34;ch&#34;, (CHAR, slot)) for slot in slots)
             )
             if extractAttr is None
-            else cv.get(extractAttr, sourceNode)
+            else (
+                int(extractAttr)
+                if extractAttr.isdecimal()
+                else (
+                    extractAttr[1:-1]
+                    if extractAttr.startswith(&#34;&lt;&#34;) and extractAttr.endswith(&#34;&gt;&#34;)
+                    else (cv.get(extractAttr, sourceNode) or &#34;&#34;).strip()
+                )
+            )
         )
-        sourceText = (sourceText or &#34;&#34;).strip()
         source = {feature: sourceText}
         cv.feature(targetNode, **source)
 
@@ -1034,7 +1042,7 @@ or by elements within a single TEI source file.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/helpers.py#L265-L340" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/helpers.py#L265-L340" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def checkModel(kind, thisModel, verbose):
     modelDefault = (
@@ -1122,7 +1130,7 @@ or by elements within a single TEI source file.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/helpers.py#L842-L867" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/helpers.py#L850-L875" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getImageLocations(app, prod, silent):
     repoLocation = app.repoLocation
@@ -1160,7 +1168,7 @@ or by elements within a single TEI source file.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/helpers.py#L789-L839" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/helpers.py#L797-L847" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getImageSizes(scanRefDir, doCovers, silent):
     sizeInfo = {}
@@ -1223,7 +1231,7 @@ or by elements within a single TEI source file.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/helpers.py#L719-L786" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/helpers.py#L727-L794" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getPageInfo(pageInfoDir, zoneBased, manifestLevel):
     if pageInfoDir is None:
@@ -1303,7 +1311,7 @@ or by elements within a single TEI source file.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/helpers.py#L222-L237" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/helpers.py#L222-L237" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getWhites(text):
     match = W_BEFORE.match(text)
@@ -1375,7 +1383,7 @@ that attribute, not from the content of the element.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/helpers.py#L606-L716" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/helpers.py#L606-L724" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def lookupSource(cv, cur, tokenAsSlot, specs):
     &#34;&#34;&#34;Looks up information from the current XML stack.
@@ -1449,6 +1457,7 @@ that attribute, not from the content of the element.</p>
                     (lookForTag, extractAttr) = pieces
                 else:
                     extractAttr = None
+
             ok = compareToTag == lookForTag
 
             if not ok:
@@ -1483,9 +1492,16 @@ that attribute, not from the content of the element.</p>
                 else &#34;&#34;.join(cv.get(&#34;ch&#34;, (CHAR, slot)) for slot in slots)
             )
             if extractAttr is None
-            else cv.get(extractAttr, sourceNode)
+            else (
+                int(extractAttr)
+                if extractAttr.isdecimal()
+                else (
+                    extractAttr[1:-1]
+                    if extractAttr.startswith(&#34;&lt;&#34;) and extractAttr.endswith(&#34;&gt;&#34;)
+                    else (cv.get(extractAttr, sourceNode) or &#34;&#34;).strip()
+                )
+            )
         )
-        sourceText = (sourceText or &#34;&#34;).strip()
         source = {feature: sourceText}
         cv.feature(targetNode, **source)</code></pre>
 </details>
@@ -1498,7 +1514,7 @@ that attribute, not from the content of the element.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/helpers.py#L343-L359" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/helpers.py#L343-L359" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def matchModel(properties, tag, atts):
     if tag == properties[&#34;element&#34;]:
@@ -1527,7 +1543,7 @@ that attribute, not from the content of the element.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/helpers.py#L258-L262" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/helpers.py#L258-L262" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def repTokens(tokens):
     text = []
@@ -1544,7 +1560,7 @@ that attribute, not from the content of the element.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/helpers.py#L362-L413" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/helpers.py#L362-L413" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def setUp(kind):
     helpText = f&#34;&#34;&#34;
@@ -1608,7 +1624,7 @@ that attribute, not from the content of the element.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/helpers.py#L240-L255" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/helpers.py#L240-L255" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def tokenize(line):
     tokens = []
@@ -1636,7 +1652,7 @@ that attribute, not from the content of the element.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/helpers.py#L416-L603" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/helpers.py#L416-L603" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def tweakTrans(
     template,

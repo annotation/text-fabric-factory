@@ -31,7 +31,7 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/iiif.py#L1-L624" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/iiif.py#L1-L623" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">import collections
 
@@ -242,7 +242,6 @@ class IIIF:
 
         locations = getImageLocations(app, prod, silent)
         repoLocation = locations.repoLocation
-        console(f&#34;{repoLocation=}&#34;)
         self.thumbDir = locations.thumbDir
         scanRefDir = locations.scanRefDir
         self.scanRefDir = scanRefDir
@@ -674,7 +673,7 @@ class IIIF:
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/iiif.py#L28-L49" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/iiif.py#L28-L49" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def fillinIIIF(data, **kwargs):
     tpd = type(data)
@@ -734,7 +733,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/iiif.py#L52-L147" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/iiif.py#L52-L147" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def parseIIIF(settings, prod, selector, **kwargs):
     &#34;&#34;&#34;Parse the iiif yml file and deliver a filled in section.
@@ -877,7 +876,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/iiif.py#L150-L624" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/iiif.py#L150-L623" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class IIIF:
     def __init__(
@@ -939,7 +938,6 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 
         locations = getImageLocations(app, prod, silent)
         repoLocation = locations.repoLocation
-        console(f&#34;{repoLocation=}&#34;)
         self.thumbDir = locations.thumbDir
         scanRefDir = locations.scanRefDir
         self.scanRefDir = scanRefDir
@@ -1367,7 +1365,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/iiif.py#L316-L326" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/iiif.py#L315-L325" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def console(self, msg, **kwargs):
     &#34;&#34;&#34;Print something to the output.
@@ -1390,7 +1388,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/iiif.py#L385-L513" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/iiif.py#L384-L512" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def genPages(self, kind, folder=None, file=None):
     if self.error:
@@ -1531,7 +1529,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/iiif.py#L361-L383" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/iiif.py#L360-L382" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getPageSeq(self):
     if self.error:
@@ -1566,7 +1564,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/iiif.py#L328-L349" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/iiif.py#L327-L348" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getRotations(self):
     if self.error:
@@ -1600,7 +1598,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/iiif.py#L351-L359" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/iiif.py#L350-L358" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getSizes(self):
     if self.error:
@@ -1621,7 +1619,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/iiif.py#L515-L624" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/iiif.py#L514-L623" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def manifests(self):
     if self.error:

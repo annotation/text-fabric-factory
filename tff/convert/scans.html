@@ -31,7 +31,7 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/scans.py#L1-L297" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/scans.py#L1-L400" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">from subprocess import run
 
@@ -55,13 +55,13 @@ from .iiif import FILE_NOT_FOUND
 
 
 LOGO = &#34;logo&#34;
-PAGES = &#34;pages&#34;
 SCANS = &#34;scans&#34;
 SCANINFO = &#34;scanInfo&#34;
 THUMB = &#34;thumb&#34;
 SCAN_COMMAND = &#34;/opt/homebrew/bin/magick&#34;
-SIZES_COMMAND = &#34;/opt/homebrew/bin/identify&#34;
+IDENTIFY_COMMAND = &#34;/opt/homebrew/bin/identify&#34;
 SIZES_OPTIONS = [&#34;-ping&#34;, &#34;-format&#34;, &#34;%w %h&#34;]
+COLORSPACE_OPTIONS = [&#34;-ping&#34;, &#34;-format&#34;, &#34;%[colorspace]&#34;]
 
 DS_STORE = &#34;.DS_Store&#34;
 
@@ -83,7 +83,7 @@ class Scans:
         ----------
         backend, org, repo, relative: string, optional None
             If all of these are None, these parameters are derived from the
-            currend directory.
+            current directory.
             If one of them is not None, all four of them are taken from the parameters,
             and the current directory is not used to determine them.
         repoDir: string, optional None
@@ -134,14 +134,10 @@ class Scans:
         scanDir = f&#34;{sourceRefDir}/{SCANS}&#34;
         scanInfoDir = f&#34;{sourceRefDir}/{SCANINFO}&#34;
         thumbDir = f&#34;{sourceRefDir}/{THUMB}&#34;
-        pageInDir = f&#34;{scanDir}/{PAGES}&#34;
-        logoInDir = f&#34;{scanDir}/{LOGO}&#34;
 
         self.scanDir = scanDir
         self.scanInfoDir = scanInfoDir
         self.thumbDir = thumbDir
-        self.pageInDir = pageInDir
-        self.logoInDir = logoInDir
 
         self.verbose = verbose
         self.force = force
@@ -157,7 +153,6 @@ class Scans:
         scanDir = self.scanDir
         scanInfoDir = self.scanInfoDir
         thumbDir = self.thumbDir
-        logoInDir = self.logoInDir
 
         settings = self.settings
         scanExt = settings.scanExt
@@ -165,64 +160,112 @@ class Scans:
         plabel = &#34;originals&#34;
         dlabel = &#34;thumbnails&#34;
 
-        srcDir = f&#34;{scanDir}/{PAGES}&#34;
-        dstDir = f&#34;{thumbDir}/{PAGES}&#34;
-        thumbLogoDir = f&#34;{thumbDir}/{LOGO}&#34;
-        scanInfoLogoDir = f&#34;{scanInfoDir}/{LOGO}&#34;
-        sizesFileThumb = f&#34;{thumbDir}/sizes_{PAGES}.tsv&#34;
-        sizesFileScans = f&#34;{scanDir}/sizes_{PAGES}.tsv&#34;
-        sizesFileScanInfo = f&#34;{scanInfoDir}/sizes_{PAGES}.tsv&#34;
+        for dstDir in (scanInfoDir, thumbDir):
+            if force or not dirExists(dstDir):
+                dirRemove(dstDir)
+                dirMake(dstDir)
 
-        if force or not dirExists(scanInfoDir):
-            dirRemove(scanInfoDir)
-            dirMake(scanInfoDir)
-            dirCopy(logoInDir, scanInfoLogoDir)
-            console(&#34;Initialized scanInfo dir&#34;)
-        else:
-            console(&#34;scanInfo dir already present&#34;)
-
-        if force or not dirExists(thumbLogoDir):
-            dirRemove(thumbLogoDir)
-            dirCopy(logoInDir, thumbLogoDir)
-
-        if force or not dirExists(dstDir):
-            self.doThumb(srcDir, dstDir, scanExt.orig, scanExt.thumb, plabel, dlabel)
-        else:
             if verbose == 1:
-                console(f&#34;Already present: {dlabel} ({PAGES})&#34;)
+                console(f&#34;Initialized {dstDir}&#34;)
+            else:
+                if verbose == 1:
+                    console(f&#34;{dstDir} already present&#34;)
 
-        if force or not fileExists(sizesFileThumb):
-            self.doSizes(dstDir, scanExt.thumb, sizesFileThumb, dlabel)
-        else:
-            if verbose == 1:
-                console(f&#34;Already present: sizes file {dlabel} ({PAGES})&#34;)
+        (srcFiles, srcSubDirs) = dirContents(scanDir)
 
-        if force or not fileExists(sizesFileScans):
-            self.doSizes(srcDir, scanExt.orig, sizesFileScans, plabel)
-        else:
-            if verbose == 1:
-                console(f&#34;Already present: sizes file {plabel} ({PAGES})&#34;)
+        for fl in srcFiles:
+            if fl == DS_STORE or fl.startswith(&#34;sizes_&#34;):
+                continue
 
-        if force or not fileExists(sizesFileScanInfo):
-            fileCopy(sizesFileScans, sizesFileScanInfo)
-            console(&#34;Copied sizes file to scanInfo&#34;)
-        else:
-            console(&#34;sizes file already present in scanInfo&#34;)
+            srcFl = f&#34;{scanDir}/{fl}&#34;
+            dstFl = f&#34;{thumbDir}/{fl}&#34;
+            fileCopy(srcFl, dstFl)
 
-        for folder, label, ext in (
-            (srcDir, plabel, scanExt.orig),
-            (dstDir, dlabel, scanExt.thumb),
-        ):
-            notFound = f&#34;{FILE_NOT_FOUND}.{ext}&#34;
-            files = [
-                f
-                for f in dirContents(folder)[0]
-                if f not in {DS_STORE, notFound} and extNm(f) == ext
-            ]
-            nFiles = len(files)
-            console(f&#34;{label}: {nFiles}&#34;)
+            if verbose:
+                console(f&#34;Copied top level file {fl}&#34;)
 
-    def doSizes(self, imDir, ext, sizesFile, label):
+        for sbd in srcSubDirs:
+            console(f&#34;{sbd}:&#34;)
+
+            srcDir = f&#34;{scanDir}/{sbd}&#34;
+
+            if sbd == LOGO:
+                for dstDir in (f&#34;{thumbDir}/{sbd}&#34;, f&#34;{scanInfoDir}/{sbd}&#34;):
+                    if force or not dirExists(dstDir):
+                        dirRemove(dstDir)
+                        dirCopy(srcDir, dstDir)
+
+                        if verbose:
+                            console(f&#34;\tCopied subdirectory {sbd}&#34;)
+
+            else:
+                sizesFileThumb = f&#34;{thumbDir}/sizes_{sbd}.tsv&#34;
+                sizesFileScans = f&#34;{scanDir}/sizes_{sbd}.tsv&#34;
+                sizesFileScanInfo = f&#34;{scanInfoDir}/sizes_{sbd}.tsv&#34;
+                colorspacesFileScans = f&#34;{scanDir}/colorspaces_{sbd}.tsv&#34;
+                colorspacesFileScanInfo = f&#34;{scanInfoDir}/colorspaces_{sbd}.tsv&#34;
+
+                if force or not dirExists(dstDir):
+                    self.doThumb(
+                        sbd,
+                        srcDir,
+                        dstDir,
+                        scanExt.orig,
+                        scanExt.thumb,
+                        plabel,
+                        dlabel,
+                    )
+                else:
+                    if verbose == 1:
+                        console(f&#34;\tAlready present: {dlabel} ({sbd})&#34;)
+
+                if force or not fileExists(sizesFileThumb):
+                    self.doSizes(sbd, dstDir, scanExt.thumb, sizesFileThumb, dlabel)
+                else:
+                    if verbose == 1:
+                        console(f&#34;\tAlready present: sizes file {dlabel} ({sbd})&#34;)
+
+                if force or not fileExists(sizesFileScans):
+                    self.doSizes(sbd, srcDir, scanExt.orig, sizesFileScans, plabel)
+                else:
+                    if verbose == 1:
+                        console(f&#34;\tAlready present: sizes file {plabel} ({sbd})&#34;)
+
+                if force or not fileExists(sizesFileScanInfo):
+                    fileCopy(sizesFileScans, sizesFileScanInfo)
+                    console(f&#34;\tCopied sizes_{sbd} file to scanInfo&#34;)
+                else:
+                    console(f&#34;\tsize_{sbd} file already present in scanInfo&#34;)
+
+                if force or not fileExists(colorspacesFileScans):
+                    self.doColorspaces(
+                        sbd, srcDir, scanExt.orig, colorspacesFileScans, plabel
+                    )
+                else:
+                    if verbose == 1:
+                        console(f&#34;\tAlready present: colorspaces file {plabel} ({sbd})&#34;)
+
+                if force or not fileExists(colorspacesFileScanInfo):
+                    self.doColorspaces(
+                        sbd, srcDir, scanExt.orig, colorspacesFileScanInfo, plabel
+                    )
+                else:
+                    console(f&#34;\tcolorspaces_{sbd} file already present in scanInfo&#34;)
+
+                for folder, label, ext in (
+                    (srcDir, plabel, scanExt.orig),
+                    (dstDir, dlabel, scanExt.thumb),
+                ):
+                    notFound = f&#34;{FILE_NOT_FOUND}.{ext}&#34;
+                    files = [
+                        f
+                        for f in dirContents(folder)[0]
+                        if f not in {DS_STORE, notFound} and extNm(f) == ext
+                    ]
+                    nFiles = len(files)
+                    console(f&#34;\t{label}: {nFiles}&#34;)
+
+    def doSizes(self, sbd, imDir, ext, sizesFile, label):
         if not self.good:
             return
 
@@ -244,7 +287,7 @@ class Scans:
             base = fileName.removesuffix(f&#34;.{thisExt}&#34;)
             items.append((base, f&#34;{imDir}/{fileName}&#34;))
 
-        console(f&#34;\tGet sizes of {len(items)} {label} ({PAGES})&#34;)
+        console(f&#34;\t\tGet sizes of {len(items)} {label} ({sbd})&#34;)
         j = 0
         nItems = len(items)
 
@@ -255,17 +298,17 @@ class Scans:
                 perc = int(round(i * 100 / nItems))
 
                 if verbose == 1:
-                    console(f&#34;\t\t{perc:&gt;3}% done&#34;)
+                    console(f&#34;\t\t\t{perc:&gt;3}% done&#34;)
 
                 j = 0
 
             status = run(
-                [SIZES_COMMAND] + SIZES_OPTIONS + [fromFile], capture_output=True
+                [IDENTIFY_COMMAND] + SIZES_OPTIONS + [fromFile], capture_output=True
             )
             j += 1
 
             if status.returncode != 0:
-                console(status.stderr.decode(&#34;utf-8&#34;), error=True)
+                console(f&#34;\t{status.stderr.decode(&#39;utf-8&#39;)}&#34;, error=True)
             else:
                 (w, h) = status.stdout.decode(&#34;utf-8&#34;).strip().split()
                 sizes.append((base, w, h))
@@ -273,7 +316,7 @@ class Scans:
         perc = 100
 
         if verbose == 1:
-            console(f&#34;\t\t{perc:&gt;3}% done&#34;)
+            console(f&#34;\t\t\t{perc:&gt;3}% done&#34;)
 
         with open(sizesFile, &#34;w&#34;) as fh:
             fh.write(&#34;file\twidth\theight\n&#34;)
@@ -281,7 +324,67 @@ class Scans:
             for file, w, h in sizes:
                 fh.write(f&#34;{file}\t{w}\t{h}\n&#34;)
 
-    def doThumb(self, fromDir, toDir, extIn, extOut, plabel, dlabel):
+    def doColorspaces(self, sbd, imDir, ext, colorspacesFile, label):
+        if not self.good:
+            return
+
+        verbose = self.verbose
+        fileRemove(colorspacesFile)
+
+        fileNames = dirContents(imDir)[0]
+        items = []
+
+        for fileName in sorted(fileNames):
+            if fileName == DS_STORE:
+                continue
+
+            thisExt = extNm(fileName)
+
+            if thisExt != ext:
+                continue
+
+            base = fileName.removesuffix(f&#34;.{thisExt}&#34;)
+            items.append((base, f&#34;{imDir}/{fileName}&#34;))
+
+        console(f&#34;\t\tGet colorspaces of {len(items)} {label} ({sbd})&#34;)
+        j = 0
+        nItems = len(items)
+
+        colorspaces = []
+
+        for i, (base, fromFile) in enumerate(sorted(items)):
+            if j == 100:
+                perc = int(round(i * 100 / nItems))
+
+                if verbose == 1:
+                    console(f&#34;\t\t\t{perc:&gt;3}% done&#34;)
+
+                j = 0
+
+            status = run(
+                [IDENTIFY_COMMAND] + COLORSPACE_OPTIONS + [fromFile],
+                capture_output=True,
+            )
+            j += 1
+
+            if status.returncode != 0:
+                console(f&#34;\t{status.stderr.decode(&#39;utf-8&#39;)}&#34;, error=True)
+            else:
+                colorspace = status.stdout.decode(&#34;utf-8&#34;).strip()
+                colorspaces.append((base, colorspace))
+
+        perc = 100
+
+        if verbose == 1:
+            console(f&#34;\t\t\t{perc:&gt;3}% done&#34;)
+
+        with open(colorspacesFile, &#34;w&#34;) as fh:
+            fh.write(&#34;file\tcolorspace\n&#34;)
+
+            for file, colorspace in colorspaces:
+                fh.write(f&#34;{file}\t{colorspace}\n&#34;)
+
+    def doThumb(self, sbd, fromDir, toDir, extIn, extOut, plabel, dlabel):
         if not self.good:
             return
 
@@ -309,7 +412,7 @@ class Scans:
 
             items.append((base, f&#34;{fromDir}/{fileName}&#34;, f&#34;{toDir}/{base}.{extOut}&#34;))
 
-        console(f&#34;\tConvert {len(items)} {plabel} to {dlabel} ({PAGES})&#34;)
+        console(f&#34;\tConvert {len(items)} {plabel} to {dlabel} ({sbd})&#34;)
 
         j = 0
         nItems = len(items)
@@ -351,7 +454,7 @@ class Scans:
 <dl>
 <dt><strong><code>backend</code></strong>, <strong><code>org</code></strong>, <strong><code>repo</code></strong>, <strong><code>relative</code></strong> :&ensp;<code>string</code>, optional <code>None</code></dt>
 <dd>If all of these are None, these parameters are derived from the
-currend directory.
+current directory.
 If one of them is not None, all four of them are taken from the parameters,
 and the current directory is not used to determine them.</dd>
 <dt><strong><code>repoDir</code></strong> :&ensp;<code>string</code>, optional <code>None</code></dt>
@@ -363,7 +466,7 @@ with this parameter.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/scans.py#L34-L297" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/scans.py#L34-L400" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class Scans:
     def __init__(
@@ -382,7 +485,7 @@ with this parameter.</dd>
         ----------
         backend, org, repo, relative: string, optional None
             If all of these are None, these parameters are derived from the
-            currend directory.
+            current directory.
             If one of them is not None, all four of them are taken from the parameters,
             and the current directory is not used to determine them.
         repoDir: string, optional None
@@ -433,14 +536,10 @@ with this parameter.</dd>
         scanDir = f&#34;{sourceRefDir}/{SCANS}&#34;
         scanInfoDir = f&#34;{sourceRefDir}/{SCANINFO}&#34;
         thumbDir = f&#34;{sourceRefDir}/{THUMB}&#34;
-        pageInDir = f&#34;{scanDir}/{PAGES}&#34;
-        logoInDir = f&#34;{scanDir}/{LOGO}&#34;
 
         self.scanDir = scanDir
         self.scanInfoDir = scanInfoDir
         self.thumbDir = thumbDir
-        self.pageInDir = pageInDir
-        self.logoInDir = logoInDir
 
         self.verbose = verbose
         self.force = force
@@ -456,7 +555,6 @@ with this parameter.</dd>
         scanDir = self.scanDir
         scanInfoDir = self.scanInfoDir
         thumbDir = self.thumbDir
-        logoInDir = self.logoInDir
 
         settings = self.settings
         scanExt = settings.scanExt
@@ -464,64 +562,112 @@ with this parameter.</dd>
         plabel = &#34;originals&#34;
         dlabel = &#34;thumbnails&#34;
 
-        srcDir = f&#34;{scanDir}/{PAGES}&#34;
-        dstDir = f&#34;{thumbDir}/{PAGES}&#34;
-        thumbLogoDir = f&#34;{thumbDir}/{LOGO}&#34;
-        scanInfoLogoDir = f&#34;{scanInfoDir}/{LOGO}&#34;
-        sizesFileThumb = f&#34;{thumbDir}/sizes_{PAGES}.tsv&#34;
-        sizesFileScans = f&#34;{scanDir}/sizes_{PAGES}.tsv&#34;
-        sizesFileScanInfo = f&#34;{scanInfoDir}/sizes_{PAGES}.tsv&#34;
+        for dstDir in (scanInfoDir, thumbDir):
+            if force or not dirExists(dstDir):
+                dirRemove(dstDir)
+                dirMake(dstDir)
 
-        if force or not dirExists(scanInfoDir):
-            dirRemove(scanInfoDir)
-            dirMake(scanInfoDir)
-            dirCopy(logoInDir, scanInfoLogoDir)
-            console(&#34;Initialized scanInfo dir&#34;)
-        else:
-            console(&#34;scanInfo dir already present&#34;)
-
-        if force or not dirExists(thumbLogoDir):
-            dirRemove(thumbLogoDir)
-            dirCopy(logoInDir, thumbLogoDir)
-
-        if force or not dirExists(dstDir):
-            self.doThumb(srcDir, dstDir, scanExt.orig, scanExt.thumb, plabel, dlabel)
-        else:
             if verbose == 1:
-                console(f&#34;Already present: {dlabel} ({PAGES})&#34;)
+                console(f&#34;Initialized {dstDir}&#34;)
+            else:
+                if verbose == 1:
+                    console(f&#34;{dstDir} already present&#34;)
 
-        if force or not fileExists(sizesFileThumb):
-            self.doSizes(dstDir, scanExt.thumb, sizesFileThumb, dlabel)
-        else:
-            if verbose == 1:
-                console(f&#34;Already present: sizes file {dlabel} ({PAGES})&#34;)
+        (srcFiles, srcSubDirs) = dirContents(scanDir)
 
-        if force or not fileExists(sizesFileScans):
-            self.doSizes(srcDir, scanExt.orig, sizesFileScans, plabel)
-        else:
-            if verbose == 1:
-                console(f&#34;Already present: sizes file {plabel} ({PAGES})&#34;)
+        for fl in srcFiles:
+            if fl == DS_STORE or fl.startswith(&#34;sizes_&#34;):
+                continue
 
-        if force or not fileExists(sizesFileScanInfo):
-            fileCopy(sizesFileScans, sizesFileScanInfo)
-            console(&#34;Copied sizes file to scanInfo&#34;)
-        else:
-            console(&#34;sizes file already present in scanInfo&#34;)
+            srcFl = f&#34;{scanDir}/{fl}&#34;
+            dstFl = f&#34;{thumbDir}/{fl}&#34;
+            fileCopy(srcFl, dstFl)
 
-        for folder, label, ext in (
-            (srcDir, plabel, scanExt.orig),
-            (dstDir, dlabel, scanExt.thumb),
-        ):
-            notFound = f&#34;{FILE_NOT_FOUND}.{ext}&#34;
-            files = [
-                f
-                for f in dirContents(folder)[0]
-                if f not in {DS_STORE, notFound} and extNm(f) == ext
-            ]
-            nFiles = len(files)
-            console(f&#34;{label}: {nFiles}&#34;)
+            if verbose:
+                console(f&#34;Copied top level file {fl}&#34;)
 
-    def doSizes(self, imDir, ext, sizesFile, label):
+        for sbd in srcSubDirs:
+            console(f&#34;{sbd}:&#34;)
+
+            srcDir = f&#34;{scanDir}/{sbd}&#34;
+
+            if sbd == LOGO:
+                for dstDir in (f&#34;{thumbDir}/{sbd}&#34;, f&#34;{scanInfoDir}/{sbd}&#34;):
+                    if force or not dirExists(dstDir):
+                        dirRemove(dstDir)
+                        dirCopy(srcDir, dstDir)
+
+                        if verbose:
+                            console(f&#34;\tCopied subdirectory {sbd}&#34;)
+
+            else:
+                sizesFileThumb = f&#34;{thumbDir}/sizes_{sbd}.tsv&#34;
+                sizesFileScans = f&#34;{scanDir}/sizes_{sbd}.tsv&#34;
+                sizesFileScanInfo = f&#34;{scanInfoDir}/sizes_{sbd}.tsv&#34;
+                colorspacesFileScans = f&#34;{scanDir}/colorspaces_{sbd}.tsv&#34;
+                colorspacesFileScanInfo = f&#34;{scanInfoDir}/colorspaces_{sbd}.tsv&#34;
+
+                if force or not dirExists(dstDir):
+                    self.doThumb(
+                        sbd,
+                        srcDir,
+                        dstDir,
+                        scanExt.orig,
+                        scanExt.thumb,
+                        plabel,
+                        dlabel,
+                    )
+                else:
+                    if verbose == 1:
+                        console(f&#34;\tAlready present: {dlabel} ({sbd})&#34;)
+
+                if force or not fileExists(sizesFileThumb):
+                    self.doSizes(sbd, dstDir, scanExt.thumb, sizesFileThumb, dlabel)
+                else:
+                    if verbose == 1:
+                        console(f&#34;\tAlready present: sizes file {dlabel} ({sbd})&#34;)
+
+                if force or not fileExists(sizesFileScans):
+                    self.doSizes(sbd, srcDir, scanExt.orig, sizesFileScans, plabel)
+                else:
+                    if verbose == 1:
+                        console(f&#34;\tAlready present: sizes file {plabel} ({sbd})&#34;)
+
+                if force or not fileExists(sizesFileScanInfo):
+                    fileCopy(sizesFileScans, sizesFileScanInfo)
+                    console(f&#34;\tCopied sizes_{sbd} file to scanInfo&#34;)
+                else:
+                    console(f&#34;\tsize_{sbd} file already present in scanInfo&#34;)
+
+                if force or not fileExists(colorspacesFileScans):
+                    self.doColorspaces(
+                        sbd, srcDir, scanExt.orig, colorspacesFileScans, plabel
+                    )
+                else:
+                    if verbose == 1:
+                        console(f&#34;\tAlready present: colorspaces file {plabel} ({sbd})&#34;)
+
+                if force or not fileExists(colorspacesFileScanInfo):
+                    self.doColorspaces(
+                        sbd, srcDir, scanExt.orig, colorspacesFileScanInfo, plabel
+                    )
+                else:
+                    console(f&#34;\tcolorspaces_{sbd} file already present in scanInfo&#34;)
+
+                for folder, label, ext in (
+                    (srcDir, plabel, scanExt.orig),
+                    (dstDir, dlabel, scanExt.thumb),
+                ):
+                    notFound = f&#34;{FILE_NOT_FOUND}.{ext}&#34;
+                    files = [
+                        f
+                        for f in dirContents(folder)[0]
+                        if f not in {DS_STORE, notFound} and extNm(f) == ext
+                    ]
+                    nFiles = len(files)
+                    console(f&#34;\t{label}: {nFiles}&#34;)
+
+    def doSizes(self, sbd, imDir, ext, sizesFile, label):
         if not self.good:
             return
 
@@ -543,7 +689,7 @@ with this parameter.</dd>
             base = fileName.removesuffix(f&#34;.{thisExt}&#34;)
             items.append((base, f&#34;{imDir}/{fileName}&#34;))
 
-        console(f&#34;\tGet sizes of {len(items)} {label} ({PAGES})&#34;)
+        console(f&#34;\t\tGet sizes of {len(items)} {label} ({sbd})&#34;)
         j = 0
         nItems = len(items)
 
@@ -554,17 +700,17 @@ with this parameter.</dd>
                 perc = int(round(i * 100 / nItems))
 
                 if verbose == 1:
-                    console(f&#34;\t\t{perc:&gt;3}% done&#34;)
+                    console(f&#34;\t\t\t{perc:&gt;3}% done&#34;)
 
                 j = 0
 
             status = run(
-                [SIZES_COMMAND] + SIZES_OPTIONS + [fromFile], capture_output=True
+                [IDENTIFY_COMMAND] + SIZES_OPTIONS + [fromFile], capture_output=True
             )
             j += 1
 
             if status.returncode != 0:
-                console(status.stderr.decode(&#34;utf-8&#34;), error=True)
+                console(f&#34;\t{status.stderr.decode(&#39;utf-8&#39;)}&#34;, error=True)
             else:
                 (w, h) = status.stdout.decode(&#34;utf-8&#34;).strip().split()
                 sizes.append((base, w, h))
@@ -572,7 +718,7 @@ with this parameter.</dd>
         perc = 100
 
         if verbose == 1:
-            console(f&#34;\t\t{perc:&gt;3}% done&#34;)
+            console(f&#34;\t\t\t{perc:&gt;3}% done&#34;)
 
         with open(sizesFile, &#34;w&#34;) as fh:
             fh.write(&#34;file\twidth\theight\n&#34;)
@@ -580,7 +726,67 @@ with this parameter.</dd>
             for file, w, h in sizes:
                 fh.write(f&#34;{file}\t{w}\t{h}\n&#34;)
 
-    def doThumb(self, fromDir, toDir, extIn, extOut, plabel, dlabel):
+    def doColorspaces(self, sbd, imDir, ext, colorspacesFile, label):
+        if not self.good:
+            return
+
+        verbose = self.verbose
+        fileRemove(colorspacesFile)
+
+        fileNames = dirContents(imDir)[0]
+        items = []
+
+        for fileName in sorted(fileNames):
+            if fileName == DS_STORE:
+                continue
+
+            thisExt = extNm(fileName)
+
+            if thisExt != ext:
+                continue
+
+            base = fileName.removesuffix(f&#34;.{thisExt}&#34;)
+            items.append((base, f&#34;{imDir}/{fileName}&#34;))
+
+        console(f&#34;\t\tGet colorspaces of {len(items)} {label} ({sbd})&#34;)
+        j = 0
+        nItems = len(items)
+
+        colorspaces = []
+
+        for i, (base, fromFile) in enumerate(sorted(items)):
+            if j == 100:
+                perc = int(round(i * 100 / nItems))
+
+                if verbose == 1:
+                    console(f&#34;\t\t\t{perc:&gt;3}% done&#34;)
+
+                j = 0
+
+            status = run(
+                [IDENTIFY_COMMAND] + COLORSPACE_OPTIONS + [fromFile],
+                capture_output=True,
+            )
+            j += 1
+
+            if status.returncode != 0:
+                console(f&#34;\t{status.stderr.decode(&#39;utf-8&#39;)}&#34;, error=True)
+            else:
+                colorspace = status.stdout.decode(&#34;utf-8&#34;).strip()
+                colorspaces.append((base, colorspace))
+
+        perc = 100
+
+        if verbose == 1:
+            console(f&#34;\t\t\t{perc:&gt;3}% done&#34;)
+
+        with open(colorspacesFile, &#34;w&#34;) as fh:
+            fh.write(&#34;file\tcolorspace\n&#34;)
+
+            for file, colorspace in colorspaces:
+                fh.write(f&#34;{file}\t{colorspace}\n&#34;)
+
+    def doThumb(self, sbd, fromDir, toDir, extIn, extOut, plabel, dlabel):
         if not self.good:
             return
 
@@ -608,7 +814,7 @@ with this parameter.</dd>
 
             items.append((base, f&#34;{fromDir}/{fileName}&#34;, f&#34;{toDir}/{base}.{extOut}&#34;))
 
-        console(f&#34;\tConvert {len(items)} {plabel} to {dlabel} ({PAGES})&#34;)
+        console(f&#34;\tConvert {len(items)} {plabel} to {dlabel} ({sbd})&#34;)
 
         j = 0
         nItems = len(items)
@@ -632,17 +838,88 @@ with this parameter.</dd>
 </details>
 <h3>Methods</h3>
 <dl>
-<dt id="tff.convert.scans.Scans.doSizes"><code class="name flex">
-<span>def <span class="ident">doSizes</span></span>(<span>self, imDir, ext, sizesFile, label)</span>
+<dt id="tff.convert.scans.Scans.doColorspaces"><code class="name flex">
+<span>def <span class="ident">doColorspaces</span></span>(<span>self, sbd, imDir, ext, colorspacesFile, label)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/scans.py#L190-L247" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/scans.py#L292-L350" class="git-link">Browse git</a>
 </summary>
-<pre><code class="python">def doSizes(self, imDir, ext, sizesFile, label):
+<pre><code class="python">def doColorspaces(self, sbd, imDir, ext, colorspacesFile, label):
+    if not self.good:
+        return
+
+    verbose = self.verbose
+    fileRemove(colorspacesFile)
+
+    fileNames = dirContents(imDir)[0]
+    items = []
+
+    for fileName in sorted(fileNames):
+        if fileName == DS_STORE:
+            continue
+
+        thisExt = extNm(fileName)
+
+        if thisExt != ext:
+            continue
+
+        base = fileName.removesuffix(f&#34;.{thisExt}&#34;)
+        items.append((base, f&#34;{imDir}/{fileName}&#34;))
+
+    console(f&#34;\t\tGet colorspaces of {len(items)} {label} ({sbd})&#34;)
+    j = 0
+    nItems = len(items)
+
+    colorspaces = []
+
+    for i, (base, fromFile) in enumerate(sorted(items)):
+        if j == 100:
+            perc = int(round(i * 100 / nItems))
+
+            if verbose == 1:
+                console(f&#34;\t\t\t{perc:&gt;3}% done&#34;)
+
+            j = 0
+
+        status = run(
+            [IDENTIFY_COMMAND] + COLORSPACE_OPTIONS + [fromFile],
+            capture_output=True,
+        )
+        j += 1
+
+        if status.returncode != 0:
+            console(f&#34;\t{status.stderr.decode(&#39;utf-8&#39;)}&#34;, error=True)
+        else:
+            colorspace = status.stdout.decode(&#34;utf-8&#34;).strip()
+            colorspaces.append((base, colorspace))
+
+    perc = 100
+
+    if verbose == 1:
+        console(f&#34;\t\t\t{perc:&gt;3}% done&#34;)
+
+    with open(colorspacesFile, &#34;w&#34;) as fh:
+        fh.write(&#34;file\tcolorspace\n&#34;)
+
+        for file, colorspace in colorspaces:
+            fh.write(f&#34;{file}\t{colorspace}\n&#34;)</code></pre>
+</details>
+</dd>
+<dt id="tff.convert.scans.Scans.doSizes"><code class="name flex">
+<span>def <span class="ident">doSizes</span></span>(<span>self, sbd, imDir, ext, sizesFile, label)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/scans.py#L233-L290" class="git-link">Browse git</a>
+</summary>
+<pre><code class="python">def doSizes(self, sbd, imDir, ext, sizesFile, label):
     if not self.good:
         return
 
@@ -664,7 +941,7 @@ with this parameter.</dd>
         base = fileName.removesuffix(f&#34;.{thisExt}&#34;)
         items.append((base, f&#34;{imDir}/{fileName}&#34;))
 
-    console(f&#34;\tGet sizes of {len(items)} {label} ({PAGES})&#34;)
+    console(f&#34;\t\tGet sizes of {len(items)} {label} ({sbd})&#34;)
     j = 0
     nItems = len(items)
 
@@ -675,17 +952,17 @@ with this parameter.</dd>
             perc = int(round(i * 100 / nItems))
 
             if verbose == 1:
-                console(f&#34;\t\t{perc:&gt;3}% done&#34;)
+                console(f&#34;\t\t\t{perc:&gt;3}% done&#34;)
 
             j = 0
 
         status = run(
-            [SIZES_COMMAND] + SIZES_OPTIONS + [fromFile], capture_output=True
+            [IDENTIFY_COMMAND] + SIZES_OPTIONS + [fromFile], capture_output=True
         )
         j += 1
 
         if status.returncode != 0:
-            console(status.stderr.decode(&#34;utf-8&#34;), error=True)
+            console(f&#34;\t{status.stderr.decode(&#39;utf-8&#39;)}&#34;, error=True)
         else:
             (w, h) = status.stdout.decode(&#34;utf-8&#34;).strip().split()
             sizes.append((base, w, h))
@@ -693,7 +970,7 @@ with this parameter.</dd>
     perc = 100
 
     if verbose == 1:
-        console(f&#34;\t\t{perc:&gt;3}% done&#34;)
+        console(f&#34;\t\t\t{perc:&gt;3}% done&#34;)
 
     with open(sizesFile, &#34;w&#34;) as fh:
         fh.write(&#34;file\twidth\theight\n&#34;)
@@ -703,16 +980,16 @@ with this parameter.</dd>
 </details>
 </dd>
 <dt id="tff.convert.scans.Scans.doThumb"><code class="name flex">
-<span>def <span class="ident">doThumb</span></span>(<span>self, fromDir, toDir, extIn, extOut, plabel, dlabel)</span>
+<span>def <span class="ident">doThumb</span></span>(<span>self, sbd, fromDir, toDir, extIn, extOut, plabel, dlabel)</span>
 </code></dt>
 <dd>
 <div class="desc"></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/scans.py#L249-L297" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/scans.py#L352-L400" class="git-link">Browse git</a>
 </summary>
-<pre><code class="python">def doThumb(self, fromDir, toDir, extIn, extOut, plabel, dlabel):
+<pre><code class="python">def doThumb(self, sbd, fromDir, toDir, extIn, extOut, plabel, dlabel):
     if not self.good:
         return
 
@@ -740,7 +1017,7 @@ with this parameter.</dd>
 
         items.append((base, f&#34;{fromDir}/{fileName}&#34;, f&#34;{toDir}/{base}.{extOut}&#34;))
 
-    console(f&#34;\tConvert {len(items)} {plabel} to {dlabel} ({PAGES})&#34;)
+    console(f&#34;\tConvert {len(items)} {plabel} to {dlabel} ({sbd})&#34;)
 
     j = 0
     nItems = len(items)
@@ -771,7 +1048,7 @@ with this parameter.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/scans.py#L114-L188" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/scans.py#L110-L231" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def process(self, force=False):
     if not self.good:
@@ -784,7 +1061,6 @@ with this parameter.</dd>
     scanDir = self.scanDir
     scanInfoDir = self.scanInfoDir
     thumbDir = self.thumbDir
-    logoInDir = self.logoInDir
 
     settings = self.settings
     scanExt = settings.scanExt
@@ -792,62 +1068,110 @@ with this parameter.</dd>
     plabel = &#34;originals&#34;
     dlabel = &#34;thumbnails&#34;
 
-    srcDir = f&#34;{scanDir}/{PAGES}&#34;
-    dstDir = f&#34;{thumbDir}/{PAGES}&#34;
-    thumbLogoDir = f&#34;{thumbDir}/{LOGO}&#34;
-    scanInfoLogoDir = f&#34;{scanInfoDir}/{LOGO}&#34;
-    sizesFileThumb = f&#34;{thumbDir}/sizes_{PAGES}.tsv&#34;
-    sizesFileScans = f&#34;{scanDir}/sizes_{PAGES}.tsv&#34;
-    sizesFileScanInfo = f&#34;{scanInfoDir}/sizes_{PAGES}.tsv&#34;
+    for dstDir in (scanInfoDir, thumbDir):
+        if force or not dirExists(dstDir):
+            dirRemove(dstDir)
+            dirMake(dstDir)
 
-    if force or not dirExists(scanInfoDir):
-        dirRemove(scanInfoDir)
-        dirMake(scanInfoDir)
-        dirCopy(logoInDir, scanInfoLogoDir)
-        console(&#34;Initialized scanInfo dir&#34;)
-    else:
-        console(&#34;scanInfo dir already present&#34;)
-
-    if force or not dirExists(thumbLogoDir):
-        dirRemove(thumbLogoDir)
-        dirCopy(logoInDir, thumbLogoDir)
-
-    if force or not dirExists(dstDir):
-        self.doThumb(srcDir, dstDir, scanExt.orig, scanExt.thumb, plabel, dlabel)
-    else:
         if verbose == 1:
-            console(f&#34;Already present: {dlabel} ({PAGES})&#34;)
+            console(f&#34;Initialized {dstDir}&#34;)
+        else:
+            if verbose == 1:
+                console(f&#34;{dstDir} already present&#34;)
 
-    if force or not fileExists(sizesFileThumb):
-        self.doSizes(dstDir, scanExt.thumb, sizesFileThumb, dlabel)
-    else:
-        if verbose == 1:
-            console(f&#34;Already present: sizes file {dlabel} ({PAGES})&#34;)
+    (srcFiles, srcSubDirs) = dirContents(scanDir)
 
-    if force or not fileExists(sizesFileScans):
-        self.doSizes(srcDir, scanExt.orig, sizesFileScans, plabel)
-    else:
-        if verbose == 1:
-            console(f&#34;Already present: sizes file {plabel} ({PAGES})&#34;)
+    for fl in srcFiles:
+        if fl == DS_STORE or fl.startswith(&#34;sizes_&#34;):
+            continue
 
-    if force or not fileExists(sizesFileScanInfo):
-        fileCopy(sizesFileScans, sizesFileScanInfo)
-        console(&#34;Copied sizes file to scanInfo&#34;)
-    else:
-        console(&#34;sizes file already present in scanInfo&#34;)
+        srcFl = f&#34;{scanDir}/{fl}&#34;
+        dstFl = f&#34;{thumbDir}/{fl}&#34;
+        fileCopy(srcFl, dstFl)
 
-    for folder, label, ext in (
-        (srcDir, plabel, scanExt.orig),
-        (dstDir, dlabel, scanExt.thumb),
-    ):
-        notFound = f&#34;{FILE_NOT_FOUND}.{ext}&#34;
-        files = [
-            f
-            for f in dirContents(folder)[0]
-            if f not in {DS_STORE, notFound} and extNm(f) == ext
-        ]
-        nFiles = len(files)
-        console(f&#34;{label}: {nFiles}&#34;)</code></pre>
+        if verbose:
+            console(f&#34;Copied top level file {fl}&#34;)
+
+    for sbd in srcSubDirs:
+        console(f&#34;{sbd}:&#34;)
+
+        srcDir = f&#34;{scanDir}/{sbd}&#34;
+
+        if sbd == LOGO:
+            for dstDir in (f&#34;{thumbDir}/{sbd}&#34;, f&#34;{scanInfoDir}/{sbd}&#34;):
+                if force or not dirExists(dstDir):
+                    dirRemove(dstDir)
+                    dirCopy(srcDir, dstDir)
+
+                    if verbose:
+                        console(f&#34;\tCopied subdirectory {sbd}&#34;)
+
+        else:
+            sizesFileThumb = f&#34;{thumbDir}/sizes_{sbd}.tsv&#34;
+            sizesFileScans = f&#34;{scanDir}/sizes_{sbd}.tsv&#34;
+            sizesFileScanInfo = f&#34;{scanInfoDir}/sizes_{sbd}.tsv&#34;
+            colorspacesFileScans = f&#34;{scanDir}/colorspaces_{sbd}.tsv&#34;
+            colorspacesFileScanInfo = f&#34;{scanInfoDir}/colorspaces_{sbd}.tsv&#34;
+
+            if force or not dirExists(dstDir):
+                self.doThumb(
+                    sbd,
+                    srcDir,
+                    dstDir,
+                    scanExt.orig,
+                    scanExt.thumb,
+                    plabel,
+                    dlabel,
+                )
+            else:
+                if verbose == 1:
+                    console(f&#34;\tAlready present: {dlabel} ({sbd})&#34;)
+
+            if force or not fileExists(sizesFileThumb):
+                self.doSizes(sbd, dstDir, scanExt.thumb, sizesFileThumb, dlabel)
+            else:
+                if verbose == 1:
+                    console(f&#34;\tAlready present: sizes file {dlabel} ({sbd})&#34;)
+
+            if force or not fileExists(sizesFileScans):
+                self.doSizes(sbd, srcDir, scanExt.orig, sizesFileScans, plabel)
+            else:
+                if verbose == 1:
+                    console(f&#34;\tAlready present: sizes file {plabel} ({sbd})&#34;)
+
+            if force or not fileExists(sizesFileScanInfo):
+                fileCopy(sizesFileScans, sizesFileScanInfo)
+                console(f&#34;\tCopied sizes_{sbd} file to scanInfo&#34;)
+            else:
+                console(f&#34;\tsize_{sbd} file already present in scanInfo&#34;)
+
+            if force or not fileExists(colorspacesFileScans):
+                self.doColorspaces(
+                    sbd, srcDir, scanExt.orig, colorspacesFileScans, plabel
+                )
+            else:
+                if verbose == 1:
+                    console(f&#34;\tAlready present: colorspaces file {plabel} ({sbd})&#34;)
+
+            if force or not fileExists(colorspacesFileScanInfo):
+                self.doColorspaces(
+                    sbd, srcDir, scanExt.orig, colorspacesFileScanInfo, plabel
+                )
+            else:
+                console(f&#34;\tcolorspaces_{sbd} file already present in scanInfo&#34;)
+
+            for folder, label, ext in (
+                (srcDir, plabel, scanExt.orig),
+                (dstDir, dlabel, scanExt.thumb),
+            ):
+                notFound = f&#34;{FILE_NOT_FOUND}.{ext}&#34;
+                files = [
+                    f
+                    for f in dirContents(folder)[0]
+                    if f not in {DS_STORE, notFound} and extNm(f) == ext
+                ]
+                nFiles = len(files)
+                console(f&#34;\t{label}: {nFiles}&#34;)</code></pre>
 </details>
 </dd>
 </dl>
@@ -922,6 +1246,7 @@ setTimeout(() => input.focus(), 100);
 <li>
 <h4><code><a title="tff.convert.scans.Scans" href="#tff.convert.scans.Scans">Scans</a></code></h4>
 <ul class="">
+<li><code><a title="tff.convert.scans.Scans.doColorspaces" href="#tff.convert.scans.Scans.doColorspaces">doColorspaces</a></code></li>
 <li><code><a title="tff.convert.scans.Scans.doSizes" href="#tff.convert.scans.Scans.doSizes">doSizes</a></code></li>
 <li><code><a title="tff.convert.scans.Scans.doThumb" href="#tff.convert.scans.Scans.doThumb">doThumb</a></code></li>
 <li><code><a title="tff.convert.scans.Scans.process" href="#tff.convert.scans.Scans.process">process</a></code></li>

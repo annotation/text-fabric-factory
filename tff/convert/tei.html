@@ -173,6 +173,38 @@ where the <code>description</code> will be filled with the text<pre><code>The id
 </code></pre>
 </li>
 </ul>
+<p>Instead of the text content of the <code>idno</code> element, you can also ask for the content
+of one of its attributes with a syntax like this:</p>
+<pre><code>    path:
+      - element@attribute
+      - parentElement
+      - grandParentElement
+</code></pre>
+<p>You can also ask for a concrete string value like this</p>
+<pre><code>   path
+     - element@&lt;value&gt;
+</code></pre>
+<p>or a concrete integer like this</p>
+<pre><code>   path
+     - element@99
+</code></pre>
+<p>For example, if you want to mark elements that have a specific parent element, e.g.
+head elements under a figure element, you can specify</p>
+<pre><code>  inFigure:
+    meta:
+      description: &gt;-
+        Whether this elements has a figure element as parent; «base»
+      valueType: int
+      conversionMethod: derived
+      conversionCode: tt
+    path:
+      - head@1
+      - figure
+    nodeType: head
+</code></pre>
+<p>With this instruction, all head elements whose parent is a figure element get a
+feature named <code>inFigure</code> with value 1. Head elements with a different parent do not get
+a feature assignment for <code>inFigure</code>.</p>
 <h3 id="granularity"><code>granularity</code></h3>
 <p>string, optional <code>token</code></p>
 <p>What to take the basic entities (slots). Possible values:</p>
@@ -557,7 +589,7 @@ corpus of 14 letter by the Dutch artist Piet Mondriaan.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L1-L5601" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L1-L5652" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">&#34;&#34;&#34;
 # TEI import
@@ -723,6 +755,52 @@ The meaning is:
     where the `description` will be filled with the text
 
         The identifier of a letter; the content is taken from sourceDesc/msDesc/msIdentifier/altIdentifier/idno[type=letterId]
+
+Instead of the text content of the `idno` element, you can also ask for the content
+of one of its attributes with a syntax like this:
+
+```
+    path:
+      - element@attribute
+      - parentElement
+      - grandParentElement
+```
+
+You can also ask for a concrete string value like this
+
+```
+   path
+     - element@&lt;value&gt;
+```
+
+or a concrete integer like this
+
+```
+   path
+     - element@99
+```
+
+For example, if you want to mark elements that have a specific parent element, e.g.
+head elements under a figure element, you can specify
+
+```
+  inFigure:
+    meta:
+      description: &gt;-
+        Whether this elements has a figure element as parent; «base»
+      valueType: int
+      conversionMethod: derived
+      conversionCode: tt
+    path:
+      - head@1
+      - figure
+    nodeType: head
+```
+
+With this instruction, all head elements whose parent is a figure element get a
+feature named `inFigure` with value 1. Head elements with a different parent do not get
+a feature assignment for `inFigure`.
+
 
 ### `granularity`
 
@@ -2237,6 +2315,7 @@ class TEI(CheckImport):
             featPathLogical = []
 
             sep = &#34;&#34;
+
             for comp in reversed(featPath or []):
                 if type(comp) is str:
                     featPathRep += f&#34;{sep}{comp}&#34;
@@ -2256,6 +2335,7 @@ class TEI(CheckImport):
                 k: v.replace(&#34;«base»&#34;, featPathRep) for (k, v) in featMeta.items()
             }
             nodeType = featSpecs.get(&#34;nodeType&#34;, None)
+
             if nodeType is not None and featPath:
                 extraInstructions.append(
                     (list(reversed(featPathLogical)), nodeType, feat)
@@ -3855,6 +3935,7 @@ class TEI(CheckImport):
                         cv.edge(curNode, parentNode, parent=None)
 
                 cur[TNEST].append(curNode)
+                cur[NODE][tag] = curNode
 
                 if siblingEdges:
                     if len(cur[TSIB]):
@@ -3890,6 +3971,8 @@ class TEI(CheckImport):
 
                 if len(cur[TNEST]):
                     cur[TNEST].pop()
+                if tag in cur[NODE]:
+                    del cur[NODE][tag]
                 if siblingEdges:
                     if len(cur[TSIB]):
                         cur[TSIB].pop()
@@ -6177,7 +6260,7 @@ if __name__ == &#34;__main__&#34;:
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L970-L987" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L1016-L1033" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getRefs(tag, atts, xmlFile):
     refAtt = REFERENCING.get(tag, None)
@@ -6207,7 +6290,7 @@ if __name__ == &#34;__main__&#34;:
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L5587-L5597" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L5638-L5648" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def main():
     (good, tasks, params, flags) = readArgs(
@@ -6230,7 +6313,7 @@ if __name__ == &#34;__main__&#34;:
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L953-L967" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L999-L1013" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def makeCssInfo():
     &#34;&#34;&#34;Make the CSS info for the style sheet.&#34;&#34;&#34;
@@ -6387,7 +6470,7 @@ and the current directory is not used to determine them.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L990-L5584" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L1036-L5635" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class TEI(CheckImport):
     def __init__(
@@ -7078,6 +7161,7 @@ and the current directory is not used to determine them.</dd>
             featPathLogical = []
 
             sep = &#34;&#34;
+
             for comp in reversed(featPath or []):
                 if type(comp) is str:
                     featPathRep += f&#34;{sep}{comp}&#34;
@@ -7097,6 +7181,7 @@ and the current directory is not used to determine them.</dd>
                 k: v.replace(&#34;«base»&#34;, featPathRep) for (k, v) in featMeta.items()
             }
             nodeType = featSpecs.get(&#34;nodeType&#34;, None)
+
             if nodeType is not None and featPath:
                 extraInstructions.append(
                     (list(reversed(featPathLogical)), nodeType, feat)
@@ -8696,6 +8781,7 @@ and the current directory is not used to determine them.</dd>
                         cv.edge(curNode, parentNode, parent=None)
 
                 cur[TNEST].append(curNode)
+                cur[NODE][tag] = curNode
 
                 if siblingEdges:
                     if len(cur[TSIB]):
@@ -8731,6 +8817,8 @@ and the current directory is not used to determine them.</dd>
 
                 if len(cur[TNEST]):
                     cur[TNEST].pop()
+                if tag in cur[NODE]:
+                    del cur[NODE][tag]
                 if siblingEdges:
                     if len(cur[TSIB]):
                         cur[TSIB].pop()
@@ -11028,7 +11116,7 @@ that code between automatic generation of files.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L5093-L5465" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L5144-L5516" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def appTask(self, tokenBased=False):
     &#34;&#34;&#34;Implementation of the &#34;app&#34; task.
@@ -11421,7 +11509,7 @@ There should be a valid TF dataset and app configuration in place</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L5469-L5505" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L5520-L5556" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def browseTask(self):
     &#34;&#34;&#34;Implementation of the &#34;browse&#34; task.
@@ -11506,7 +11594,7 @@ at your own risk.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L1978-L3045" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L2026-L3093" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def checkTask(self, carryon=False):
     &#34;&#34;&#34;Implementation of the &#34;check&#34; task.
@@ -12592,7 +12680,7 @@ at your own risk.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L4958-L5042" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L5009-L5093" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def convertTask(self):
     &#34;&#34;&#34;Implementation of the &#34;convert&#34; task.
@@ -12694,7 +12782,7 @@ at your own risk.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L3049-L3062" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L3097-L3110" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getConverter(self):
     &#34;&#34;&#34;Initializes a converter.
@@ -12735,7 +12823,7 @@ that has access to this data.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L3066-L4956" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L3114-L5007" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getDirector(self):
     &#34;&#34;&#34;Factory for the director function.
@@ -12968,6 +13056,7 @@ that has access to this data.</p>
                     cv.edge(curNode, parentNode, parent=None)
 
             cur[TNEST].append(curNode)
+            cur[NODE][tag] = curNode
 
             if siblingEdges:
                 if len(cur[TSIB]):
@@ -13003,6 +13092,8 @@ that has access to this data.</p>
 
             if len(cur[TNEST]):
                 cur[TNEST].pop()
+            if tag in cur[NODE]:
+                del cur[NODE][tag]
             if siblingEdges:
                 if len(cur[TSIB]):
                     cur[TSIB].pop()
@@ -14644,7 +14735,7 @@ that has access to this data.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L1822-L1844" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L1870-L1892" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getParser(self):
     &#34;&#34;&#34;Configure the LXML parser.
@@ -14679,7 +14770,7 @@ that has access to this data.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L1779-L1820" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L1827-L1868" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getSwitches(self, xmlPath):
     verbose = self.verbose
@@ -14748,7 +14839,7 @@ that contains the file names in that folder, sorted.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L1879-L1976" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L1927-L2024" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getXML(self):
     &#34;&#34;&#34;Make an inventory of the TEI source files.
@@ -14870,7 +14961,7 @@ the results of which will be cached in the invisible <code>.tf</code> directory 
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L5044-L5089" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L5095-L5140" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def loadTask(self):
     &#34;&#34;&#34;Implementation of the &#34;load&#34; task.
@@ -14946,7 +15037,7 @@ If the parsing failed, a message is written to stderr.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L1846-L1877" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L1894-L1925" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def parseXML(self, fileName, fileOrText, parser):
     &#34;&#34;&#34;Parse an XML source.
@@ -14990,7 +15081,7 @@ If the parsing failed, a message is written to stderr.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L1710-L1777" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L1758-L1825" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def readSchemas(self):
     schemaDir = self.schemaDir
@@ -15102,7 +15193,7 @@ will not be executed.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/c3eeb7d7b30502f1107a0db2fd4c0d74b7265f7a/tff/convert/tei.py#L5507-L5584" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/544d43e7f7f7ecd7a8f148092cd0d3a62c07d977/tff/convert/tei.py#L5558-L5635" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def task(
     self,
