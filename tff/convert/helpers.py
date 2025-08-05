@@ -675,6 +675,7 @@ def lookupSource(cv, cur, tokenAsSlot, specs):
                     (lookForTag, extractAttr) = pieces
                 else:
                     extractAttr = None
+
             ok = compareToTag == lookForTag
 
             if not ok:
@@ -709,9 +710,16 @@ def lookupSource(cv, cur, tokenAsSlot, specs):
                 else "".join(cv.get("ch", (CHAR, slot)) for slot in slots)
             )
             if extractAttr is None
-            else cv.get(extractAttr, sourceNode)
+            else (
+                int(extractAttr)
+                if extractAttr.isdecimal()
+                else (
+                    extractAttr[1:-1]
+                    if extractAttr.startswith("<") and extractAttr.endswith(">")
+                    else (cv.get(extractAttr, sourceNode) or "").strip()
+                )
+            )
         )
-        sourceText = (sourceText or "").strip()
         source = {feature: sourceText}
         cv.feature(targetNode, **source)
 

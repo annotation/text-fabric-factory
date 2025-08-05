@@ -163,6 +163,52 @@ The meaning is:
 
         The identifier of a letter; the content is taken from sourceDesc/msDesc/msIdentifier/altIdentifier/idno[type=letterId]
 
+Instead of the text content of the `idno` element, you can also ask for the content
+of one of its attributes with a syntax like this:
+
+```
+    path:
+      - element@attribute
+      - parentElement
+      - grandParentElement
+```
+
+You can also ask for a concrete string value like this
+
+```
+   path
+     - element@<value>
+```
+
+or a concrete integer like this
+
+```
+   path
+     - element@99
+```
+
+For example, if you want to mark elements that have a specific parent element, e.g.
+head elements under a figure element, you can specify
+
+```
+  inFigure:
+    meta:
+      description: >-
+        Whether this elements has a figure element as parent; «base»
+      valueType: int
+      conversionMethod: derived
+      conversionCode: tt
+    path:
+      - head@1
+      - figure
+    nodeType: head
+```
+
+With this instruction, all head elements whose parent is a figure element get a
+feature named `inFigure` with value 1. Head elements with a different parent do not get
+a feature assignment for `inFigure`.
+
+
 ### `granularity`
 
 string, optional `token`
@@ -1676,6 +1722,7 @@ class TEI(CheckImport):
             featPathLogical = []
 
             sep = ""
+
             for comp in reversed(featPath or []):
                 if type(comp) is str:
                     featPathRep += f"{sep}{comp}"
@@ -1695,6 +1742,7 @@ class TEI(CheckImport):
                 k: v.replace("«base»", featPathRep) for (k, v) in featMeta.items()
             }
             nodeType = featSpecs.get("nodeType", None)
+
             if nodeType is not None and featPath:
                 extraInstructions.append(
                     (list(reversed(featPathLogical)), nodeType, feat)
@@ -3294,6 +3342,7 @@ class TEI(CheckImport):
                         cv.edge(curNode, parentNode, parent=None)
 
                 cur[TNEST].append(curNode)
+                cur[NODE][tag] = curNode
 
                 if siblingEdges:
                     if len(cur[TSIB]):
@@ -3329,6 +3378,8 @@ class TEI(CheckImport):
 
                 if len(cur[TNEST]):
                     cur[TNEST].pop()
+                if tag in cur[NODE]:
+                    del cur[NODE][tag]
                 if siblingEdges:
                     if len(cur[TSIB]):
                         cur[TSIB].pop()
