@@ -653,6 +653,7 @@ def lookupSource(cv, cur, tokenAsSlot, specs):
         The first component may have a tag name that has `@` plus an attribute name
         appended to it. That means that the information will be extracted from
         that attribute, not from the content of the element.
+        If the attribute is not present, no feature value will be created.
     """
     nest = cur[XNEST]
     nNest = len(nest)
@@ -700,8 +701,11 @@ def lookupSource(cv, cur, tokenAsSlot, specs):
 
         sourceNode = cur[TNEST][-1]
         slots = cv.linked(sourceNode)
-        sourceText = (
-            (
+
+        skip = False
+
+        if extractAttr is None:
+            sourceText = (
                 "".join(
                     cv.get("str", (T, slot)) + cv.get("after", (T, slot))
                     for slot in slots
@@ -709,19 +713,23 @@ def lookupSource(cv, cur, tokenAsSlot, specs):
                 if tokenAsSlot
                 else "".join(cv.get("ch", (CHAR, slot)) for slot in slots)
             )
-            if extractAttr is None
-            else (
-                int(extractAttr)
-                if extractAttr.isdecimal()
-                else (
-                    extractAttr[1:-1]
-                    if extractAttr.startswith("<") and extractAttr.endswith(">")
-                    else (cv.get(extractAttr, sourceNode) or "").strip()
-                )
-            )
-        )
-        source = {feature: sourceText}
-        cv.feature(targetNode, **source)
+        else:
+            if extractAttr.isdecimal():
+                sourceText = int(extractAttr)
+            else:
+                if extractAttr.startswith("<") and extractAttr.endswith(">"):
+                    sourceText = extractAttr[1:-1]
+                else:
+                    sourceText = cv.get(extractAttr, sourceNode)
+
+                    if sourceText is None:
+                        skip = True
+                    else:
+                        sourceText = sourceText.strip()
+
+        if not skip:
+            source = {feature: sourceText}
+            cv.feature(targetNode, **source)
 
 
 def getPageInfo(pageInfoDir, zoneBased, manifestLevel):

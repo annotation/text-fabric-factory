@@ -173,6 +173,8 @@ of one of its attributes with a syntax like this:
       - grandParentElement
 ```
 
+If there is no such attribute, no feature value will be assigned.
+
 You can also ask for a concrete string value like this
 
 ```
