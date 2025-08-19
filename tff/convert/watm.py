@@ -614,7 +614,7 @@ def getResultDir(baseDir, headPart, version, prod, silent, withSuffix=True):
     The directory to which the resulting WATM is written, depends on a number of
     factors:
 
-    *   production or development
+    *   development, preview or publication
     *   the repo location
     *   the relative location of the tf directory in the repo
 
@@ -637,8 +637,9 @@ def getResultDir(baseDir, headPart, version, prod, silent, withSuffix=True):
     Whatever we got, we increment it and write it to the file `latest`.
     That is the new version suffix.
 
-    Inside the resulting directory, the production WATM resides under `prod` and
-    the development WATM resides under `dev`.
+    Inside the resulting directory, the development WATM resides under `dev` and
+    the preview WATM resides under `preview`, and the publication WATM resides under
+    `pub`.
 
     Parameters
     ----------
@@ -649,7 +650,7 @@ def getResultDir(baseDir, headPart, version, prod, silent, withSuffix=True):
     version: string
         The version of the TF on which the WATM is based
     prod: string:
-        Whether we are in a production or development or preview run
+        Whether we are in a `prod`, `dev`, `preview` or `pub` run
     silent: boolean
         Whether we should operate silently.
     withSuffix: boolean, True
@@ -662,9 +663,11 @@ def getResultDir(baseDir, headPart, version, prod, silent, withSuffix=True):
     prodRep = (
         "production"
         if prod == "prod"
+        else "publication"
+        if prod == "pub"
         else "preview" if prod == "preview" else "development"
     )
-    prodFix = prod if prod in {"prod", "dev", "preview"} else "dev"
+    prodFix = prod if prod in {"prod", "dev", "preview", "pub"} else "dev"
     resultDirBase = f"{baseDir}{headPart}/{TT_NAME}"
     initTree(resultDirBase, fresh=False)
 
@@ -1017,10 +1020,11 @@ class WATM:
         silent: boolean, optional False
             Whether to suppress output to the console
         prod: string, optional dev
-            If "prod", we make a production version, if "preview" we make a
-            preview version, otherwise we make development version.
+            If "prod", we make a production version, if `dev` we make a development
+            version, if "preview" we make a preview version, if `pub` we make a
+            published version, otherwise we make development version.
             Production versions end up in the `watm` directory, preview and
-            development versions in the `_temp/watm` directory.
+            development and pub versions in the `_temp/watm` directory.
 
             Production versions have an extra sequence number behind the TF version
             on which they are based, e.g. `2.1.0e-001`, `2.1.0e-002`.
@@ -1028,7 +1032,7 @@ class WATM:
             sequence number.
             The sequence number is stored in a file `latest` in the `watm` directory.
 
-            Development and preview versions are always equal to the TF
+            Development and preview and pub versions are always equal to the TF
             versions and can be overwritten.
 
             This mechanism helps you to ensure that you do not change existing
@@ -1044,7 +1048,7 @@ class WATM:
         self.extra = extra
         self.silent = silent
         self.withScans = withScans
-        self.prod = prod if prod in {"prod", "dev", "preview"} else "dev"
+        self.prod = prod if prod in {"prod", "dev", "preview", "pub"} else "dev"
         self.pageInfoDir = pageInfoDir
         api = app.api
         F = api.F

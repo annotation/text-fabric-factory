@@ -70,10 +70,10 @@ def parseIIIF(settings, prod, selector, **kwargs):
     Parameters
     ----------
     prod: string
-        Either `prod` or `dev` or `preview`.
+        Either `prod` or `dev` or `preview` or `pub`.
         This determines whether we fill in a production value or a develop value
-        or a preview value for each of the settings mentioned in the `switches`
-        section of the iiif.yml file.
+        or a preview value or a pub value for each of the settings mentioned in
+        the `switches` section of the iiif.yml file.
     selector: string
         Either `scans` or `templates` or `excludedFolders`.
         Which top-level of sections we are going to grab out of the iiif.yml file.
@@ -174,12 +174,13 @@ class IIIF:
         outputDir: string, optional None
             If present, manifests nad logo will be generated in this directory.
             Otherwise a standard location is chosen: `static` at
-            the top-level of the repo and within that `prod` or `dev` or `preview`
+            the top-level of the repo and within that `prod` or `dev` or
+            `preview` or `pub`.
         prod: string, optional dev
             Whether the manifests are for production (`prod`) or development (`dev`)
-            or preview (`preview`)
-            If the value is `preview` we assume that the actual scans are in a IIIF
-            repo, and not within reach of the code here. But we do assume
+            or preview (`preview`) or publication (`pub`).
+            If the value is `preview` or `pub` we assume that the actual scans
+            are in a IIIF repo, and not within reach of the code here. But we do assume
             that a sizes file is present in the expected location (in the scanRefDir),
             and possibly a rotations file.
         silent: boolean, optional False
@@ -192,7 +193,7 @@ class IIIF:
         self.teiVersion = teiVersion
         self.app = app
         self.pageInfoDir = pageInfoDir
-        self.prod = prod if prod in {"prod", "dev", "preview"} else "dev"
+        self.prod = prod if prod in {"prod", "dev", "preview", "pub"} else "dev"
         self.silent = silent
         self.error = False
         self.kwargs = kwargs
@@ -433,7 +434,7 @@ class IIIF:
             else:
                 region = "full"
 
-            if prod == "preview":
+            if prod in {"preview", "pub"}:
                 scanPresent = p in sizeInfo
             else:
                 pFile = f"{scanRefDir}/{kind}/{p}.{ext}"
