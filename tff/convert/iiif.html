@@ -31,7 +31,7 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/iiif.py#L1-L623" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/iiif.py#L1-L624" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">import collections
 
@@ -105,10 +105,10 @@ def parseIIIF(settings, prod, selector, **kwargs):
     Parameters
     ----------
     prod: string
-        Either `prod` or `dev` or `preview`.
+        Either `prod` or `dev` or `preview` or `pub`.
         This determines whether we fill in a production value or a develop value
-        or a preview value for each of the settings mentioned in the `switches`
-        section of the iiif.yml file.
+        or a preview value or a pub value for each of the settings mentioned in
+        the `switches` section of the iiif.yml file.
     selector: string
         Either `scans` or `templates` or `excludedFolders`.
         Which top-level of sections we are going to grab out of the iiif.yml file.
@@ -209,12 +209,13 @@ class IIIF:
         outputDir: string, optional None
             If present, manifests nad logo will be generated in this directory.
             Otherwise a standard location is chosen: `static` at
-            the top-level of the repo and within that `prod` or `dev` or `preview`
+            the top-level of the repo and within that `prod` or `dev` or
+            `preview` or `pub`.
         prod: string, optional dev
             Whether the manifests are for production (`prod`) or development (`dev`)
-            or preview (`preview`)
-            If the value is `preview` we assume that the actual scans are in a IIIF
-            repo, and not within reach of the code here. But we do assume
+            or preview (`preview`) or publication (`pub`).
+            If the value is `preview` or `pub` we assume that the actual scans
+            are in a IIIF repo, and not within reach of the code here. But we do assume
             that a sizes file is present in the expected location (in the scanRefDir),
             and possibly a rotations file.
         silent: boolean, optional False
@@ -227,7 +228,7 @@ class IIIF:
         self.teiVersion = teiVersion
         self.app = app
         self.pageInfoDir = pageInfoDir
-        self.prod = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;} else &#34;dev&#34;
+        self.prod = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;, &#34;pub&#34;} else &#34;dev&#34;
         self.silent = silent
         self.error = False
         self.kwargs = kwargs
@@ -468,7 +469,7 @@ class IIIF:
             else:
                 region = &#34;full&#34;
 
-            if prod == &#34;preview&#34;:
+            if prod in {&#34;preview&#34;, &#34;pub&#34;}:
                 scanPresent = p in sizeInfo
             else:
                 pFile = f&#34;{scanRefDir}/{kind}/{p}.{ext}&#34;
@@ -673,7 +674,7 @@ class IIIF:
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/iiif.py#L28-L49" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/iiif.py#L28-L49" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def fillinIIIF(data, **kwargs):
     tpd = type(data)
@@ -718,10 +719,10 @@ choice is based on the parameter <code>selector</code>.</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>prod</code></strong> :&ensp;<code>string</code></dt>
-<dd>Either <code>prod</code> or <code>dev</code> or <code>preview</code>.
+<dd>Either <code>prod</code> or <code>dev</code> or <code>preview</code> or <code>pub</code>.
 This determines whether we fill in a production value or a develop value
-or a preview value for each of the settings mentioned in the <code>switches</code>
-section of the iiif.yml file.</dd>
+or a preview value or a pub value for each of the settings mentioned in
+the <code>switches</code> section of the iiif.yml file.</dd>
 <dt><strong><code>selector</code></strong> :&ensp;<code>string</code></dt>
 <dd>Either <code>scans</code> or <code>templates</code> or <code>excludedFolders</code>.
 Which top-level of sections we are going to grab out of the iiif.yml file.</dd>
@@ -733,7 +734,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/iiif.py#L52-L147" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/iiif.py#L52-L147" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def parseIIIF(settings, prod, selector, **kwargs):
     &#34;&#34;&#34;Parse the iiif yml file and deliver a filled in section.
@@ -756,10 +757,10 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
     Parameters
     ----------
     prod: string
-        Either `prod` or `dev` or `preview`.
+        Either `prod` or `dev` or `preview` or `pub`.
         This determines whether we fill in a production value or a develop value
-        or a preview value for each of the settings mentioned in the `switches`
-        section of the iiif.yml file.
+        or a preview value or a pub value for each of the settings mentioned in
+        the `switches` section of the iiif.yml file.
     selector: string
         Either `scans` or `templates` or `excludedFolders`.
         Which top-level of sections we are going to grab out of the iiif.yml file.
@@ -858,12 +859,13 @@ page sequence file.</dd>
 <dt><strong><code>outputDir</code></strong> :&ensp;<code>string</code>, optional <code>None</code></dt>
 <dd>If present, manifests nad logo will be generated in this directory.
 Otherwise a standard location is chosen: <code>static</code> at
-the top-level of the repo and within that <code>prod</code> or <code>dev</code> or <code>preview</code></dd>
+the top-level of the repo and within that <code>prod</code> or <code>dev</code> or
+<code>preview</code> or <code>pub</code>.</dd>
 <dt><strong><code>prod</code></strong> :&ensp;<code>string</code>, optional <code>dev</code></dt>
 <dd>Whether the manifests are for production (<code>prod</code>) or development (<code>dev</code>)
-or preview (<code>preview</code>)
-If the value is <code>preview</code> we assume that the actual scans are in a IIIF
-repo, and not within reach of the code here. But we do assume
+or preview (<code>preview</code>) or publication (<code>pub</code>).
+If the value is <code>preview</code> or <code>pub</code> we assume that the actual scans
+are in a IIIF repo, and not within reach of the code here. But we do assume
 that a sizes file is present in the expected location (in the scanRefDir),
 and possibly a rotations file.</dd>
 <dt><strong><code>silent</code></strong> :&ensp;<code>boolean</code>, optional <code>False</code></dt>
@@ -876,7 +878,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/iiif.py#L150-L623" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/iiif.py#L150-L624" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class IIIF:
     def __init__(
@@ -905,12 +907,13 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         outputDir: string, optional None
             If present, manifests nad logo will be generated in this directory.
             Otherwise a standard location is chosen: `static` at
-            the top-level of the repo and within that `prod` or `dev` or `preview`
+            the top-level of the repo and within that `prod` or `dev` or
+            `preview` or `pub`.
         prod: string, optional dev
             Whether the manifests are for production (`prod`) or development (`dev`)
-            or preview (`preview`)
-            If the value is `preview` we assume that the actual scans are in a IIIF
-            repo, and not within reach of the code here. But we do assume
+            or preview (`preview`) or publication (`pub`).
+            If the value is `preview` or `pub` we assume that the actual scans
+            are in a IIIF repo, and not within reach of the code here. But we do assume
             that a sizes file is present in the expected location (in the scanRefDir),
             and possibly a rotations file.
         silent: boolean, optional False
@@ -923,7 +926,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         self.teiVersion = teiVersion
         self.app = app
         self.pageInfoDir = pageInfoDir
-        self.prod = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;} else &#34;dev&#34;
+        self.prod = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;, &#34;pub&#34;} else &#34;dev&#34;
         self.silent = silent
         self.error = False
         self.kwargs = kwargs
@@ -1164,7 +1167,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
             else:
                 region = &#34;full&#34;
 
-            if prod == &#34;preview&#34;:
+            if prod in {&#34;preview&#34;, &#34;pub&#34;}:
                 scanPresent = p in sizeInfo
             else:
                 pFile = f&#34;{scanRefDir}/{kind}/{p}.{ext}&#34;
@@ -1365,7 +1368,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/iiif.py#L315-L325" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/iiif.py#L316-L326" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def console(self, msg, **kwargs):
     &#34;&#34;&#34;Print something to the output.
@@ -1388,7 +1391,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/iiif.py#L384-L512" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/iiif.py#L385-L513" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def genPages(self, kind, folder=None, file=None):
     if self.error:
@@ -1442,7 +1445,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
         else:
             region = &#34;full&#34;
 
-        if prod == &#34;preview&#34;:
+        if prod in {&#34;preview&#34;, &#34;pub&#34;}:
             scanPresent = p in sizeInfo
         else:
             pFile = f&#34;{scanRefDir}/{kind}/{p}.{ext}&#34;
@@ -1529,7 +1532,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/iiif.py#L360-L382" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/iiif.py#L361-L383" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getPageSeq(self):
     if self.error:
@@ -1564,7 +1567,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/iiif.py#L327-L348" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/iiif.py#L328-L349" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getRotations(self):
     if self.error:
@@ -1598,7 +1601,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/iiif.py#L350-L358" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/iiif.py#L351-L359" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getSizes(self):
     if self.error:
@@ -1619,7 +1622,7 @@ of the form <code>[</code><em>arg</em><code>]</code>.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/iiif.py#L514-L623" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/iiif.py#L515-L624" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def manifests(self):
     if self.error:

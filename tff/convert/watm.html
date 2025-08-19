@@ -529,7 +529,7 @@ settings will prevent some TF information from reaching the WATM.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L1-L3230" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L1-L3234" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">&#34;&#34;&#34;Export to Web Annotation Text Model
 
@@ -1147,7 +1147,7 @@ def getResultDir(baseDir, headPart, version, prod, silent, withSuffix=True):
     The directory to which the resulting WATM is written, depends on a number of
     factors:
 
-    *   production or development
+    *   development, preview or publication
     *   the repo location
     *   the relative location of the tf directory in the repo
 
@@ -1170,8 +1170,9 @@ def getResultDir(baseDir, headPart, version, prod, silent, withSuffix=True):
     Whatever we got, we increment it and write it to the file `latest`.
     That is the new version suffix.
 
-    Inside the resulting directory, the production WATM resides under `prod` and
-    the development WATM resides under `dev`.
+    Inside the resulting directory, the development WATM resides under `dev` and
+    the preview WATM resides under `preview`, and the publication WATM resides under
+    `pub`.
 
     Parameters
     ----------
@@ -1182,7 +1183,7 @@ def getResultDir(baseDir, headPart, version, prod, silent, withSuffix=True):
     version: string
         The version of the TF on which the WATM is based
     prod: string:
-        Whether we are in a production or development or preview run
+        Whether we are in a `prod`, `dev`, `preview` or `pub` run
     silent: boolean
         Whether we should operate silently.
     withSuffix: boolean, True
@@ -1195,9 +1196,11 @@ def getResultDir(baseDir, headPart, version, prod, silent, withSuffix=True):
     prodRep = (
         &#34;production&#34;
         if prod == &#34;prod&#34;
+        else &#34;publication&#34;
+        if prod == &#34;pub&#34;
         else &#34;preview&#34; if prod == &#34;preview&#34; else &#34;development&#34;
     )
-    prodFix = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;} else &#34;dev&#34;
+    prodFix = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;, &#34;pub&#34;} else &#34;dev&#34;
     resultDirBase = f&#34;{baseDir}{headPart}/{TT_NAME}&#34;
     initTree(resultDirBase, fresh=False)
 
@@ -1550,10 +1553,11 @@ class WATM:
         silent: boolean, optional False
             Whether to suppress output to the console
         prod: string, optional dev
-            If &#34;prod&#34;, we make a production version, if &#34;preview&#34; we make a
-            preview version, otherwise we make development version.
+            If &#34;prod&#34;, we make a production version, if `dev` we make a development
+            version, if &#34;preview&#34; we make a preview version, if `pub` we make a
+            published version, otherwise we make development version.
             Production versions end up in the `watm` directory, preview and
-            development versions in the `_temp/watm` directory.
+            development and pub versions in the `_temp/watm` directory.
 
             Production versions have an extra sequence number behind the TF version
             on which they are based, e.g. `2.1.0e-001`, `2.1.0e-002`.
@@ -1561,7 +1565,7 @@ class WATM:
             sequence number.
             The sequence number is stored in a file `latest` in the `watm` directory.
 
-            Development and preview versions are always equal to the TF
+            Development and preview and pub versions are always equal to the TF
             versions and can be overwritten.
 
             This mechanism helps you to ensure that you do not change existing
@@ -1577,7 +1581,7 @@ class WATM:
         self.extra = extra
         self.silent = silent
         self.withScans = withScans
-        self.prod = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;} else &#34;dev&#34;
+        self.prod = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;, &#34;pub&#34;} else &#34;dev&#34;
         self.pageInfoDir = pageInfoDir
         api = app.api
         F = api.F
@@ -3778,7 +3782,7 @@ class WATMS:
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L906-L971" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L909-L974" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def funcPx(F, L, sizeInfo, facsMissing, feat, otype, node, facsFile, region, warnings):
     file = F.file.v(L.u(node, otype=&#34;file&#34;)[0])
@@ -3856,7 +3860,7 @@ class WATMS:
 <p>The directory to which the resulting WATM is written, depends on a number of
 factors:</p>
 <ul>
-<li>production or development</li>
+<li>development, preview or publication</li>
 <li>the repo location</li>
 <li>the relative location of the tf directory in the repo</li>
 </ul>
@@ -3874,8 +3878,9 @@ suffix in that directory, we take the highest one of them as previous version
 suffix.</p>
 <p>Whatever we got, we increment it and write it to the file <code>latest</code>.
 That is the new version suffix.</p>
-<p>Inside the resulting directory, the production WATM resides under <code>prod</code> and
-the development WATM resides under <code>dev</code>.</p>
+<p>Inside the resulting directory, the development WATM resides under <code>dev</code> and
+the preview WATM resides under <code>preview</code>, and the publication WATM resides under
+<code>pub</code>.</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>baseDir</code></strong> :&ensp;<code>string</code></dt>
@@ -3885,7 +3890,7 @@ the development WATM resides under <code>dev</code>.</p>
 <dt><strong><code>version</code></strong> :&ensp;<code>string</code></dt>
 <dd>The version of the TF on which the WATM is based</dd>
 <dt><strong><code>prod</code></strong> :&ensp;<code>string:</code></dt>
-<dd>Whether we are in a production or development or preview run</dd>
+<dd>Whether we are in a <code>prod</code>, <code>dev</code>, <code>preview</code> or <code>pub</code> run</dd>
 <dt><strong><code>silent</code></strong> :&ensp;<code>boolean</code></dt>
 <dd>Whether we should operate silently.</dd>
 <dt><strong><code>withSuffix</code></strong> :&ensp;<code>boolean, True</code></dt>
@@ -3896,7 +3901,7 @@ the development WATM resides under <code>dev</code>.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L611-L723" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L611-L726" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getResultDir(baseDir, headPart, version, prod, silent, withSuffix=True):
     &#34;&#34;&#34;Determines the directory for the resulting WATM.
@@ -3904,7 +3909,7 @@ the development WATM resides under <code>dev</code>.</p>
     The directory to which the resulting WATM is written, depends on a number of
     factors:
 
-    *   production or development
+    *   development, preview or publication
     *   the repo location
     *   the relative location of the tf directory in the repo
 
@@ -3927,8 +3932,9 @@ the development WATM resides under <code>dev</code>.</p>
     Whatever we got, we increment it and write it to the file `latest`.
     That is the new version suffix.
 
-    Inside the resulting directory, the production WATM resides under `prod` and
-    the development WATM resides under `dev`.
+    Inside the resulting directory, the development WATM resides under `dev` and
+    the preview WATM resides under `preview`, and the publication WATM resides under
+    `pub`.
 
     Parameters
     ----------
@@ -3939,7 +3945,7 @@ the development WATM resides under <code>dev</code>.</p>
     version: string
         The version of the TF on which the WATM is based
     prod: string:
-        Whether we are in a production or development or preview run
+        Whether we are in a `prod`, `dev`, `preview` or `pub` run
     silent: boolean
         Whether we should operate silently.
     withSuffix: boolean, True
@@ -3952,9 +3958,11 @@ the development WATM resides under <code>dev</code>.</p>
     prodRep = (
         &#34;production&#34;
         if prod == &#34;prod&#34;
+        else &#34;publication&#34;
+        if prod == &#34;pub&#34;
         else &#34;preview&#34; if prod == &#34;preview&#34; else &#34;development&#34;
     )
-    prodFix = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;} else &#34;dev&#34;
+    prodFix = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;, &#34;pub&#34;} else &#34;dev&#34;
     resultDirBase = f&#34;{baseDir}{headPart}/{TT_NAME}&#34;
     initTree(resultDirBase, fresh=False)
 
@@ -4092,7 +4100,7 @@ specified node type, None is returned.</li>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L726-L891" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L729-L894" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def operationalize(data):
     &#34;&#34;&#34;Translates the scans part of iiif.yml file into annotation instructions.
@@ -4280,7 +4288,7 @@ specified node type, None is returned.</li>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L597-L608" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L597-L608" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def rep(status):
     &#34;&#34;&#34;Represent a boolean status for a message to the console.
@@ -4304,7 +4312,7 @@ specified node type, None is returned.</li>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L894-L903" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L897-L906" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def showWarnings(label, warnings):
     if len(warnings):
@@ -4359,16 +4367,17 @@ value for each key is a dictionary that maps nodes to values.</dd>
 <dd>Whether to suppress output to the console</dd>
 <dt><strong><code>prod</code></strong> :&ensp;<code>string</code>, optional <code>dev</code></dt>
 <dd>
-<p>If "prod", we make a production version, if "preview" we make a
-preview version, otherwise we make development version.
+<p>If "prod", we make a production version, if <code>dev</code> we make a development
+version, if "preview" we make a preview version, if <code>pub</code> we make a
+published version, otherwise we make development version.
 Production versions end up in the <code>watm</code> directory, preview and
-development versions in the <code>_temp/watm</code> directory.</p>
+development and pub versions in the <code>_temp/watm</code> directory.</p>
 <p>Production versions have an extra sequence number behind the TF version
 on which they are based, e.g. <code>2.1.0e-001</code>, <code>2.1.0e-002</code>.
 They will never be overwritten, subsequent runs will increase the
 sequence number.
 The sequence number is stored in a file <code>latest</code> in the <code>watm</code> directory.</p>
-<p>Development and preview versions are always equal to the TF
+<p>Development and preview and pub versions are always equal to the TF
 versions and can be overwritten.</p>
 <p>This mechanism helps you to ensure that you do not change existing
 versions in the <code>watm</code> directory.</p>
@@ -4381,7 +4390,7 @@ versions in the <code>watm</code> directory.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L974-L3077" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L977-L3081" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class WATM:
     &#34;&#34;&#34;The export machinery is exposed as a class, wrapped around a TF dataset.&#34;&#34;&#34;
@@ -4429,10 +4438,11 @@ versions in the <code>watm</code> directory.</p>
         silent: boolean, optional False
             Whether to suppress output to the console
         prod: string, optional dev
-            If &#34;prod&#34;, we make a production version, if &#34;preview&#34; we make a
-            preview version, otherwise we make development version.
+            If &#34;prod&#34;, we make a production version, if `dev` we make a development
+            version, if &#34;preview&#34; we make a preview version, if `pub` we make a
+            published version, otherwise we make development version.
             Production versions end up in the `watm` directory, preview and
-            development versions in the `_temp/watm` directory.
+            development and pub versions in the `_temp/watm` directory.
 
             Production versions have an extra sequence number behind the TF version
             on which they are based, e.g. `2.1.0e-001`, `2.1.0e-002`.
@@ -4440,7 +4450,7 @@ versions in the <code>watm</code> directory.</p>
             sequence number.
             The sequence number is stored in a file `latest` in the `watm` directory.
 
-            Development and preview versions are always equal to the TF
+            Development and preview and pub versions are always equal to the TF
             versions and can be overwritten.
 
             This mechanism helps you to ensure that you do not change existing
@@ -4456,7 +4466,7 @@ versions in the <code>watm</code> directory.</p>
         self.extra = extra
         self.silent = silent
         self.withScans = withScans
-        self.prod = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;} else &#34;dev&#34;
+        self.prod = prod if prod in {&#34;prod&#34;, &#34;dev&#34;, &#34;preview&#34;, &#34;pub&#34;} else &#34;dev&#34;
         self.pageInfoDir = pageInfoDir
         api = app.api
         F = api.F
@@ -6511,7 +6521,7 @@ versions in the <code>watm</code> directory.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L2064-L2087" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L2068-L2091" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">@staticmethod
 def numEqual(nTF, nWA, silent):
@@ -6560,7 +6570,7 @@ def numEqual(nTF, nWA, silent):
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L2089-L2140" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L2093-L2144" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">@staticmethod
 def strEqual(tf, wa, silent):
@@ -6629,7 +6639,7 @@ def strEqual(tf, wa, silent):
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L1320-L1330" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L1324-L1334" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def console(self, msg, **kwargs):
     &#34;&#34;&#34;Print something to the output.
@@ -6652,7 +6662,7 @@ def strEqual(tf, wa, silent):
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L1282-L1318" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L1286-L1322" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getExcluded(self):
     silent = self.silent
@@ -6701,7 +6711,7 @@ def strEqual(tf, wa, silent):
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L1808-L1842" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L1812-L1846" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getLogicalPairs(self, waFromTF):
     hyphenation = self.hyphenation
@@ -6755,7 +6765,7 @@ exclusions.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L1435-L1806" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L1439-L1810" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def makeAnno(self):
     &#34;&#34;&#34;Make all annotations.
@@ -7142,7 +7152,7 @@ to indices in this list is stored in member <code>waFromTF</code>.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L1332-L1407" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L1336-L1411" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def makeText(self):
     &#34;&#34;&#34;Creates the text data.
@@ -7244,7 +7254,7 @@ or <code>tuple</code> of <code>strings</code></dt>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L1409-L1433" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L1413-L1437" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def mkAnno(self, kind, ns, body, target, inherited=False):
     &#34;&#34;&#34;Make a single annotation and return its id.
@@ -7297,7 +7307,7 @@ If <code>condensed</code> is True, we suppress this output.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L2142-L2201" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L2146-L2205" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def testAll(self, condensed=False):
     &#34;&#34;&#34;Test all aspects of the WATM conversion.
@@ -7384,7 +7394,7 @@ These annotations do not have namespace <code>TEI</code>.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L2595-L2806" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L2599-L2810" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def testAttributes(self):
     &#34;&#34;&#34;Test the attributes.
@@ -7618,7 +7628,7 @@ by annotations.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L2891-L3077" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L2895-L3081" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def testEdges(self):
     &#34;&#34;&#34;Test the edges.
@@ -7825,7 +7835,7 @@ dataset.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L2426-L2593" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L2430-L2597" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def testElements(self):
     &#34;&#34;&#34;Test the elements.
@@ -8014,7 +8024,7 @@ the kind <code>anno</code>.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L2808-L2889" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L2812-L2893" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def testExtra(self):
     &#34;&#34;&#34;Test the extra data for on-the-fly annotations.
@@ -8112,7 +8122,7 @@ We unpack targets if they contain structured information.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L2203-L2386" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L2207-L2390" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def testSetup(self):
     &#34;&#34;&#34;Prepare the tests.
@@ -8315,7 +8325,7 @@ whether the TF and WATM datasets agree on it.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L2388-L2424" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L2392-L2428" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def testText(self):
     &#34;&#34;&#34;Test the text.
@@ -8377,7 +8387,7 @@ have the same result base.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L1844-L2062" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L1848-L2066" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def writeAll(self, resultVersion=None):
     &#34;&#34;&#34;Write text and annotation data to disk.
@@ -8638,7 +8648,7 @@ See <code><a title="tff.convert.watm.WATM" href="#tff.convert.watm.WATM">WATM</a
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L3080-L3230" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L3084-L3234" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class WATMS:
     &#34;&#34;&#34;Export corpora that are divided over multiple TF datasets.
@@ -8804,7 +8814,7 @@ See <code><a title="tff.convert.watm.WATM" href="#tff.convert.watm.WATM">WATM</a
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L3157-L3167" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L3161-L3171" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def console(self, msg, **kwargs):
     &#34;&#34;&#34;Print something to the output.
@@ -8836,7 +8846,7 @@ Otherwise all datasets will be converted.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/f98dffab07a121ac8a2d097f3a51b2099a959d1c/tff/convert/watm.py#L3169-L3230" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/529894f6a13419a3ee38e7d01700611f7a82ffe8/tff/convert/watm.py#L3173-L3234" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def produce(self, doc=None, prod=&#34;dev&#34;):
     &#34;&#34;&#34;Convert all relevant TF datasets.
