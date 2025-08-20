@@ -4771,7 +4771,7 @@ class TEI(CheckImport):
                     if transformFunc is not None:
                         text = transformFunc(text)
 
-                    root = self.parseXML(text, parser)
+                    root = self.parseXML(xmlFile, text, parser)
 
                     if root is None:
                         console(
@@ -4862,7 +4862,7 @@ class TEI(CheckImport):
                         if transformFunc is not None:
                             text = transformFunc(text)
 
-                        root = self.parseXML(text, parser)
+                        root = self.parseXML(xmlFile, text, parser)
 
                         if root is None:
                             console(
