@@ -1,4 +1,4 @@
-<img src="/tf/docs/images/tf-small.png" align="left"/>
+<img src="/tff/docs/images/tf-small.png" align="left"/>
 
 # Text-Fabric-Factory
 

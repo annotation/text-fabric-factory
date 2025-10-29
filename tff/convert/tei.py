@@ -2888,12 +2888,6 @@ class TEI(CheckImport):
                         writeTagInfo(tag, tagInfo)
                     fh.write("\n")
 
-        def filterError(msg):
-            return msg == (
-                "Element 'graphic', attribute 'url': [facet 'pattern'] "
-                "The value '' is not accepted by the pattern '\\S+'."
-            )
-
         def doXMLFile(xmlPath):
             xmlFullPath = f"{teiPath}/{xmlPath}"
             pageScans[xmlPath] = []
@@ -2907,7 +2901,7 @@ class TEI(CheckImport):
             if root is None:
                 return
 
-            ids[xmlFile][""] = 1
+            ids[xmlPath][""] = 1
             analyse(root, analysis, xmlPath)
 
         xmlFilesByModel = collections.defaultdict(list)

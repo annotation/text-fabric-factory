@@ -15,8 +15,8 @@ to publish its textual corpora in the way of texts plus web annotations.
 
 ## Straight to ...
 
-*   Release notes (`tf.about.releases`)
-*   Install (`tf.about.install`)
+*   Release notes (`tff.about.releases`)
+*   Install (`tff.about.install`)
 
 ## Author
 

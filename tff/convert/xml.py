@@ -789,12 +789,6 @@ class XML(CheckImport):
             if verbose >= 0:
                 console(f"{infoLines} info line(s) written to {reportFile}")
 
-        def filterError(msg):
-            return msg == (
-                "Element 'graphic', attribute 'url': [facet 'pattern'] "
-                "The value '' is not accepted by the pattern '\\S+'."
-            )
-
         def doXMLFile(xmlPath):
             tree = etree.parse(xmlPath, parser)
             root = tree.getroot()
