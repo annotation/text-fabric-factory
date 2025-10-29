@@ -135,7 +135,7 @@ conversion code is demonstrated in the Greek New Testament:</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/87a5452921d16a1d54c01fbf7831c3c5cafce013/tff/convert/xml.py#L1-L1255" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/2598fbdac41e5ec5ad51eb7eb75140b27fa0988e/tff/convert/xml.py#L1-L1249" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">&#34;&#34;&#34;
 # XML import
@@ -928,12 +928,6 @@ class XML(CheckImport):
             if verbose &gt;= 0:
                 console(f&#34;{infoLines} info line(s) written to {reportFile}&#34;)
 
-        def filterError(msg):
-            return msg == (
-                &#34;Element &#39;graphic&#39;, attribute &#39;url&#39;: [facet &#39;pattern&#39;] &#34;
-                &#34;The value &#39;&#39; is not accepted by the pattern &#39;\\S+&#39;.&#34;
-            )
-
         def doXMLFile(xmlPath):
             tree = etree.parse(xmlPath, parser)
             root = tree.getroot()
@@ -1409,7 +1403,7 @@ if __name__ == &#34;__main__&#34;:
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/87a5452921d16a1d54c01fbf7831c3c5cafce013/tff/convert/xml.py#L1241-L1251" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/2598fbdac41e5ec5ad51eb7eb75140b27fa0988e/tff/convert/xml.py#L1235-L1245" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def main():
     (good, tasks, params, flags) = readArgs(
@@ -1549,7 +1543,7 @@ relevant TF version:</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/87a5452921d16a1d54c01fbf7831c3c5cafce013/tff/convert/xml.py#L195-L1238" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/2598fbdac41e5ec5ad51eb7eb75140b27fa0988e/tff/convert/xml.py#L195-L1232" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class XML(CheckImport):
     def __init__(
@@ -2148,12 +2142,6 @@ relevant TF version:</p>
             if verbose &gt;= 0:
                 console(f&#34;{infoLines} info line(s) written to {reportFile}&#34;)
 
-        def filterError(msg):
-            return msg == (
-                &#34;Element &#39;graphic&#39;, attribute &#39;url&#39;: [facet &#39;pattern&#39;] &#34;
-                &#34;The value &#39;&#39; is not accepted by the pattern &#39;\\S+&#39;.&#34;
-            )
-
         def doXMLFile(xmlPath):
             tree = etree.parse(xmlPath, parser)
             root = tree.getroot()
@@ -2632,7 +2620,7 @@ that code between automatic generation of files.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/87a5452921d16a1d54c01fbf7831c3c5cafce013/tff/convert/xml.py#L907-L1135" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/2598fbdac41e5ec5ad51eb7eb75140b27fa0988e/tff/convert/xml.py#L901-L1129" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def appTask(self, tokenBased=False):
     &#34;&#34;&#34;Implementation of the &#34;app&#34; task.
@@ -2881,7 +2869,7 @@ There should be a valid TF dataset and app configuration in place</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/87a5452921d16a1d54c01fbf7831c3c5cafce013/tff/convert/xml.py#L1139-L1175" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/2598fbdac41e5ec5ad51eb7eb75140b27fa0988e/tff/convert/xml.py#L1133-L1169" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def browseTask(self):
     &#34;&#34;&#34;Implementation of the &#34;browse&#34; task.
@@ -2947,7 +2935,7 @@ ids or keywords, are reduced to the value <code>x</code>.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/87a5452921d16a1d54c01fbf7831c3c5cafce013/tff/convert/xml.py#L587-L817" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/2598fbdac41e5ec5ad51eb7eb75140b27fa0988e/tff/convert/xml.py#L587-L811" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def checkTask(self):
     &#34;&#34;&#34;Implementation of the &#34;check&#34; task.
@@ -3154,12 +3142,6 @@ ids or keywords, are reduced to the value <code>x</code>.</p>
         if verbose &gt;= 0:
             console(f&#34;{infoLines} info line(s) written to {reportFile}&#34;)
 
-    def filterError(msg):
-        return msg == (
-            &#34;Element &#39;graphic&#39;, attribute &#39;url&#39;: [facet &#39;pattern&#39;] &#34;
-            &#34;The value &#39;&#39; is not accepted by the pattern &#39;\\S+&#39;.&#34;
-        )
-
     def doXMLFile(xmlPath):
         tree = etree.parse(xmlPath, parser)
         root = tree.getroot()
@@ -3196,7 +3178,7 @@ ids or keywords, are reduced to the value <code>x</code>.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/87a5452921d16a1d54c01fbf7831c3c5cafce013/tff/convert/xml.py#L821-L841" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/2598fbdac41e5ec5ad51eb7eb75140b27fa0988e/tff/convert/xml.py#L815-L835" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def convertTask(self):
     &#34;&#34;&#34;Implementation of the &#34;convert&#34; task.
@@ -3234,7 +3216,7 @@ ids or keywords, are reduced to the value <code>x</code>.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/87a5452921d16a1d54c01fbf7831c3c5cafce013/tff/convert/xml.py#L843-L856" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/2598fbdac41e5ec5ad51eb7eb75140b27fa0988e/tff/convert/xml.py#L837-L850" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getConverter(self):
     &#34;&#34;&#34;Initializes a converter.
@@ -3266,7 +3248,7 @@ ids or keywords, are reduced to the value <code>x</code>.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/87a5452921d16a1d54c01fbf7831c3c5cafce013/tff/convert/xml.py#L526-L548" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/2598fbdac41e5ec5ad51eb7eb75140b27fa0988e/tff/convert/xml.py#L526-L548" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getParser(self):
     &#34;&#34;&#34;Configure the LXML parser.
@@ -3309,7 +3291,7 @@ that contains the file names in that folder, sorted.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/87a5452921d16a1d54c01fbf7831c3c5cafce013/tff/convert/xml.py#L550-L585" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/2598fbdac41e5ec5ad51eb7eb75140b27fa0988e/tff/convert/xml.py#L550-L585" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getXML(self):
     &#34;&#34;&#34;Make an inventory of the XML source files.
@@ -3369,7 +3351,7 @@ the results of which will be cached in the invisible <code>.tf</code> directory 
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/87a5452921d16a1d54c01fbf7831c3c5cafce013/tff/convert/xml.py#L858-L903" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/2598fbdac41e5ec5ad51eb7eb75140b27fa0988e/tff/convert/xml.py#L852-L897" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def loadTask(self):
     &#34;&#34;&#34;Implementation of the &#34;load&#34; task.
@@ -3453,7 +3435,7 @@ will not be executed.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/87a5452921d16a1d54c01fbf7831c3c5cafce013/tff/convert/xml.py#L1177-L1238" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/2598fbdac41e5ec5ad51eb7eb75140b27fa0988e/tff/convert/xml.py#L1171-L1232" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def task(
     self,
