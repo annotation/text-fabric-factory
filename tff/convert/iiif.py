@@ -532,17 +532,18 @@ class IIIF:
 
         initTree(manifestDir, fresh=True)
 
-        miradorHtmlIn = self.miradorHtmlIn
-        miradorHtmlOut = self.miradorHtmlOut
+        if len(mirador):
+            miradorHtmlIn = self.miradorHtmlIn
+            miradorHtmlOut = self.miradorHtmlOut
 
-        with fileOpen(miradorHtmlIn) as fh:
-            miradorHtml = fh.read()
+            with fileOpen(miradorHtmlIn) as fh:
+                miradorHtml = fh.read()
 
-        miradorHtml = miradorHtml.replace("«manifests»", mirador.manifests)
-        miradorHtml = miradorHtml.replace("«example»", mirador.example)
+            miradorHtml = miradorHtml.replace("«manifests»", mirador.manifests)
+            miradorHtml = miradorHtml.replace("«example»", mirador.example)
 
-        with fileOpen(miradorHtmlOut, "w") as fh:
-            fh.write(miradorHtml)
+            with fileOpen(miradorHtmlOut, "w") as fh:
+                fh.write(miradorHtml)
 
         missingFiles = {}
         self.missingFiles = missingFiles
