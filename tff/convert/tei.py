@@ -1041,6 +1041,7 @@ class TEI(CheckImport):
         sourceBase=PARAMS["sourceBase"][1],
         reportDir=PARAMS["reportDir"][1],
         tei=PARAMS["tei"][1],
+        teiDir=PARAMS["teiDir"][1],
         tf=PARAMS["tf"][1],
         validate=PARAMS["validate"][1],
         verbose=FLAGS["verbose"][1],
@@ -1101,6 +1102,14 @@ class TEI(CheckImport):
 
         By default (if left empty) the `tei` directory is at the top-level of the
         repo, but you can specify any directory you want.
+
+        ### `teiDir`
+
+        *Top-level TEI directory under `sourceBase`.*
+
+        By default, the value is `tei`, but if you have another place or another copy
+        of tei files under `sourceBase` that you want to work with, you can
+        specifiy that here.
 
         ### `tei`
 
@@ -1247,7 +1256,7 @@ class TEI(CheckImport):
         convertCustom = f"{programDir}/tei.py"
 
         sourceRefDir = sourceBase if sourceBase else refDir
-        teiDir = f"{sourceRefDir}/tei"
+        teiRefDir = f"{sourceRefDir}/{teiDir}"
         reportDir = reportDir if reportDir else f"{sourceRefDir}/report"
         schemaDir = f"{sourceRefDir}/schema"
         self.schemaDir = schemaDir
@@ -1439,13 +1448,13 @@ class TEI(CheckImport):
         tfDir = f"{refDir}/tf"
 
         if tei in {"", None}:
-            teiPath = f"{teiDir}"
+            teiPath = f"{teiRefDir}"
             reportPath = f"{reportDir}"
-            errMsg = f"source directory does not exist: {ux(teiDir)}"
+            errMsg = f"source directory does not exist: {ux(teiRefDir)}"
             teiVersion = ""
             teiVersionRep = ""
         else:
-            teiVersions = sorted(dirContents(teiDir)[1], key=versionSort)
+            teiVersions = sorted(dirContents(teiRefDir)[1], key=versionSort)
             nTeiVersions = len(teiVersions)
 
             if tei in {"latest", "0", 0} or str(tei).lstrip("-").isdecimal():
@@ -1459,10 +1468,10 @@ class TEI(CheckImport):
                         (
                             (
                                 f"no item in {absIndex} in {nTeiVersions} source versions "
-                                f"in {ux(teiDir)}"
+                                f"in {ux(teiRefDir)}"
                             )
                             if len(teiVersions)
-                            else f"no source versions in {ux(teiDir)}"
+                            else f"no source versions in {ux(teiRefDir)}"
                         ),
                         error=True,
                     )
@@ -1471,10 +1480,10 @@ class TEI(CheckImport):
             else:
                 teiVersion = tei
 
-            errMsg = f"source version {teiVersion} does not exist in {ux(teiDir)}"
+            errMsg = f"source version {teiVersion} does not exist in {ux(teiRefDir)}"
             teiVersionRep = f"/{teiVersion}"
 
-        teiPath = f"{teiDir}{teiVersionRep}"
+        teiPath = f"{teiRefDir}{teiVersionRep}"
         reportPath = f"{reportDir}{teiVersionRep}"
 
         if not dirExists(teiPath):

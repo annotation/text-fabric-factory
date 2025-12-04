@@ -384,11 +384,11 @@ def setUp(kind):
             "latest",
         ),
         "sourceBase": (
-            ("empty: refDir/{kind.lower()};\n\t\t" "any directory of choice."),
+            "empty: refDir/{kind.lower()};\n\t\t any directory of choice.",
             "",
         ),
         "reportDir": (
-            ("empty: refDir/report;\n\t\t" "any directory of choice."),
+            "empty: refDir/report;\n\t\t any directory of choice.",
             "",
         ),
         kind.lower(): (
@@ -399,6 +399,10 @@ def setUp(kind):
                 "rest: explicit version."
             ),
             "latest",
+        ),
+        f"{kind.lower()}Dir": (
+            "empty: {kind.lower()};\n\t\t any directory of choice.",
+            kind.lower(),
         ),
         "validate": (
             "Whether to validate the XML input",
