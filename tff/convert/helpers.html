@@ -31,7 +31,7 @@ crossorigin>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/helpers.py#L1-L883" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/helpers.py#L1-L887" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">import re
 from textwrap import dedent
@@ -419,11 +419,11 @@ def setUp(kind):
             &#34;latest&#34;,
         ),
         &#34;sourceBase&#34;: (
-            (&#34;empty: refDir/{kind.lower()};\n\t\t&#34; &#34;any directory of choice.&#34;),
+            &#34;empty: refDir/{kind.lower()};\n\t\t any directory of choice.&#34;,
             &#34;&#34;,
         ),
         &#34;reportDir&#34;: (
-            (&#34;empty: refDir/report;\n\t\t&#34; &#34;any directory of choice.&#34;),
+            &#34;empty: refDir/report;\n\t\t any directory of choice.&#34;,
             &#34;&#34;,
         ),
         kind.lower(): (
@@ -434,6 +434,10 @@ def setUp(kind):
                 &#34;rest: explicit version.&#34;
             ),
             &#34;latest&#34;,
+        ),
+        f&#34;{kind.lower()}Dir&#34;: (
+            &#34;empty: {kind.lower()};\n\t\t any directory of choice.&#34;,
+            kind.lower(),
         ),
         &#34;validate&#34;: (
             &#34;Whether to validate the XML input&#34;,
@@ -1050,7 +1054,7 @@ or by elements within a single TEI source file.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/helpers.py#L265-L340" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/helpers.py#L265-L340" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def checkModel(kind, thisModel, verbose):
     modelDefault = (
@@ -1138,7 +1142,7 @@ or by elements within a single TEI source file.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/helpers.py#L858-L883" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/helpers.py#L862-L887" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getImageLocations(app, prod, silent):
     repoLocation = app.repoLocation
@@ -1176,7 +1180,7 @@ or by elements within a single TEI source file.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/helpers.py#L805-L855" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/helpers.py#L809-L859" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getImageSizes(scanRefDir, doCovers, silent):
     sizeInfo = {}
@@ -1239,7 +1243,7 @@ or by elements within a single TEI source file.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/helpers.py#L735-L802" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/helpers.py#L739-L806" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getPageInfo(pageInfoDir, zoneBased, manifestLevel):
     if pageInfoDir is None:
@@ -1319,7 +1323,7 @@ or by elements within a single TEI source file.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/helpers.py#L222-L237" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/helpers.py#L222-L237" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getWhites(text):
     match = W_BEFORE.match(text)
@@ -1392,7 +1396,7 @@ If the attribute is not present, no feature value will be created.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/helpers.py#L606-L732" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/helpers.py#L610-L736" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def lookupSource(cv, cur, tokenAsSlot, specs):
     &#34;&#34;&#34;Looks up information from the current XML stack.
@@ -1531,7 +1535,7 @@ If the attribute is not present, no feature value will be created.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/helpers.py#L343-L359" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/helpers.py#L343-L359" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def matchModel(properties, tag, atts):
     if tag == properties[&#34;element&#34;]:
@@ -1560,7 +1564,7 @@ If the attribute is not present, no feature value will be created.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/helpers.py#L258-L262" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/helpers.py#L258-L262" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def repTokens(tokens):
     text = []
@@ -1577,7 +1581,7 @@ If the attribute is not present, no feature value will be created.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/helpers.py#L362-L413" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/helpers.py#L362-L417" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def setUp(kind):
     helpText = f&#34;&#34;&#34;
@@ -1604,11 +1608,11 @@ If the attribute is not present, no feature value will be created.</p>
             &#34;latest&#34;,
         ),
         &#34;sourceBase&#34;: (
-            (&#34;empty: refDir/{kind.lower()};\n\t\t&#34; &#34;any directory of choice.&#34;),
+            &#34;empty: refDir/{kind.lower()};\n\t\t any directory of choice.&#34;,
             &#34;&#34;,
         ),
         &#34;reportDir&#34;: (
-            (&#34;empty: refDir/report;\n\t\t&#34; &#34;any directory of choice.&#34;),
+            &#34;empty: refDir/report;\n\t\t any directory of choice.&#34;,
             &#34;&#34;,
         ),
         kind.lower(): (
@@ -1619,6 +1623,10 @@ If the attribute is not present, no feature value will be created.</p>
                 &#34;rest: explicit version.&#34;
             ),
             &#34;latest&#34;,
+        ),
+        f&#34;{kind.lower()}Dir&#34;: (
+            &#34;empty: {kind.lower()};\n\t\t any directory of choice.&#34;,
+            kind.lower(),
         ),
         &#34;validate&#34;: (
             &#34;Whether to validate the XML input&#34;,
@@ -1641,7 +1649,7 @@ If the attribute is not present, no feature value will be created.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/helpers.py#L240-L255" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/helpers.py#L240-L255" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def tokenize(line):
     tokens = []
@@ -1669,7 +1677,7 @@ If the attribute is not present, no feature value will be created.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/helpers.py#L416-L603" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/helpers.py#L420-L607" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def tweakTrans(
     template,

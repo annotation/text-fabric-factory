@@ -590,7 +590,7 @@ corpus of 14 letter by the Dutch artist Piet Mondriaan.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L1-L5648" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L1-L5657" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">&#34;&#34;&#34;
 # TEI import
@@ -1635,6 +1635,7 @@ class TEI(CheckImport):
         sourceBase=PARAMS[&#34;sourceBase&#34;][1],
         reportDir=PARAMS[&#34;reportDir&#34;][1],
         tei=PARAMS[&#34;tei&#34;][1],
+        teiDir=PARAMS[&#34;teiDir&#34;][1],
         tf=PARAMS[&#34;tf&#34;][1],
         validate=PARAMS[&#34;validate&#34;][1],
         verbose=FLAGS[&#34;verbose&#34;][1],
@@ -1695,6 +1696,14 @@ class TEI(CheckImport):
 
         By default (if left empty) the `tei` directory is at the top-level of the
         repo, but you can specify any directory you want.
+
+        ### `teiDir`
+
+        *Top-level TEI directory under `sourceBase`.*
+
+        By default, the value is `tei`, but if you have another place or another copy
+        of tei files under `sourceBase` that you want to work with, you can
+        specifiy that here.
 
         ### `tei`
 
@@ -1841,7 +1850,7 @@ class TEI(CheckImport):
         convertCustom = f&#34;{programDir}/tei.py&#34;
 
         sourceRefDir = sourceBase if sourceBase else refDir
-        teiDir = f&#34;{sourceRefDir}/tei&#34;
+        teiRefDir = f&#34;{sourceRefDir}/{teiDir}&#34;
         reportDir = reportDir if reportDir else f&#34;{sourceRefDir}/report&#34;
         schemaDir = f&#34;{sourceRefDir}/schema&#34;
         self.schemaDir = schemaDir
@@ -2033,13 +2042,13 @@ class TEI(CheckImport):
         tfDir = f&#34;{refDir}/tf&#34;
 
         if tei in {&#34;&#34;, None}:
-            teiPath = f&#34;{teiDir}&#34;
+            teiPath = f&#34;{teiRefDir}&#34;
             reportPath = f&#34;{reportDir}&#34;
-            errMsg = f&#34;source directory does not exist: {ux(teiDir)}&#34;
+            errMsg = f&#34;source directory does not exist: {ux(teiRefDir)}&#34;
             teiVersion = &#34;&#34;
             teiVersionRep = &#34;&#34;
         else:
-            teiVersions = sorted(dirContents(teiDir)[1], key=versionSort)
+            teiVersions = sorted(dirContents(teiRefDir)[1], key=versionSort)
             nTeiVersions = len(teiVersions)
 
             if tei in {&#34;latest&#34;, &#34;0&#34;, 0} or str(tei).lstrip(&#34;-&#34;).isdecimal():
@@ -2053,10 +2062,10 @@ class TEI(CheckImport):
                         (
                             (
                                 f&#34;no item in {absIndex} in {nTeiVersions} source versions &#34;
-                                f&#34;in {ux(teiDir)}&#34;
+                                f&#34;in {ux(teiRefDir)}&#34;
                             )
                             if len(teiVersions)
-                            else f&#34;no source versions in {ux(teiDir)}&#34;
+                            else f&#34;no source versions in {ux(teiRefDir)}&#34;
                         ),
                         error=True,
                     )
@@ -2065,10 +2074,10 @@ class TEI(CheckImport):
             else:
                 teiVersion = tei
 
-            errMsg = f&#34;source version {teiVersion} does not exist in {ux(teiDir)}&#34;
+            errMsg = f&#34;source version {teiVersion} does not exist in {ux(teiRefDir)}&#34;
             teiVersionRep = f&#34;/{teiVersion}&#34;
 
-        teiPath = f&#34;{teiDir}{teiVersionRep}&#34;
+        teiPath = f&#34;{teiRefDir}{teiVersionRep}&#34;
         reportPath = f&#34;{reportDir}{teiVersionRep}&#34;
 
         if not dirExists(teiPath):
@@ -6257,7 +6266,7 @@ if __name__ == &#34;__main__&#34;:
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L1018-L1035" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L1018-L1035" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getRefs(tag, atts, xmlFile):
     refAtt = REFERENCING.get(tag, None)
@@ -6287,7 +6296,7 @@ if __name__ == &#34;__main__&#34;:
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L5634-L5644" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L5643-L5653" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def main():
     (good, tasks, params, flags) = readArgs(
@@ -6310,7 +6319,7 @@ if __name__ == &#34;__main__&#34;:
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L1001-L1015" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L1001-L1015" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def makeCssInfo():
     &#34;&#34;&#34;Make the CSS info for the style sheet.&#34;&#34;&#34;
@@ -6336,7 +6345,7 @@ if __name__ == &#34;__main__&#34;:
 <dl>
 <dt id="tff.convert.tei.TEI"><code class="flex name class">
 <span>class <span class="ident">TEI</span></span>
-<span>(</span><span>sourceBase='', reportDir='', tei='latest', tf='latest', validate=True, verbose=-1, backend=None, org=None, repo=None, relative=None)</span>
+<span>(</span><span>sourceBase='', reportDir='', tei='latest', teiDir='tei', tf='latest', validate=True, verbose=-1, backend=None, org=None, repo=None, relative=None)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Converts TEI to TF.</p>
@@ -6376,6 +6385,11 @@ input / output directories.</p>
 <p><em>Parent directory above the TEI-XML sources.</em></p>
 <p>By default (if left empty) the <code>tei</code> directory is at the top-level of the
 repo, but you can specify any directory you want.</p>
+<h3 id="teidir"><code>teiDir</code></h3>
+<p><em>Top-level TEI directory under <code>sourceBase</code>.</em></p>
+<p>By default, the value is <code>tei</code>, but if you have another place or another copy
+of tei files under <code>sourceBase</code> that you want to work with, you can
+specifiy that here.</p>
 <h3 id="tei"><code>tei</code></h3>
 <p><em>Location of the TEI-XML sources.</em></p>
 <p><strong>If it does not exist, the program aborts with an error.</strong></p>
@@ -6467,7 +6481,7 @@ and the current directory is not used to determine them.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L1038-L5631" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L1038-L5640" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">class TEI(CheckImport):
     def __init__(
@@ -6475,6 +6489,7 @@ and the current directory is not used to determine them.</dd>
         sourceBase=PARAMS[&#34;sourceBase&#34;][1],
         reportDir=PARAMS[&#34;reportDir&#34;][1],
         tei=PARAMS[&#34;tei&#34;][1],
+        teiDir=PARAMS[&#34;teiDir&#34;][1],
         tf=PARAMS[&#34;tf&#34;][1],
         validate=PARAMS[&#34;validate&#34;][1],
         verbose=FLAGS[&#34;verbose&#34;][1],
@@ -6535,6 +6550,14 @@ and the current directory is not used to determine them.</dd>
 
         By default (if left empty) the `tei` directory is at the top-level of the
         repo, but you can specify any directory you want.
+
+        ### `teiDir`
+
+        *Top-level TEI directory under `sourceBase`.*
+
+        By default, the value is `tei`, but if you have another place or another copy
+        of tei files under `sourceBase` that you want to work with, you can
+        specifiy that here.
 
         ### `tei`
 
@@ -6681,7 +6704,7 @@ and the current directory is not used to determine them.</dd>
         convertCustom = f&#34;{programDir}/tei.py&#34;
 
         sourceRefDir = sourceBase if sourceBase else refDir
-        teiDir = f&#34;{sourceRefDir}/tei&#34;
+        teiRefDir = f&#34;{sourceRefDir}/{teiDir}&#34;
         reportDir = reportDir if reportDir else f&#34;{sourceRefDir}/report&#34;
         schemaDir = f&#34;{sourceRefDir}/schema&#34;
         self.schemaDir = schemaDir
@@ -6873,13 +6896,13 @@ and the current directory is not used to determine them.</dd>
         tfDir = f&#34;{refDir}/tf&#34;
 
         if tei in {&#34;&#34;, None}:
-            teiPath = f&#34;{teiDir}&#34;
+            teiPath = f&#34;{teiRefDir}&#34;
             reportPath = f&#34;{reportDir}&#34;
-            errMsg = f&#34;source directory does not exist: {ux(teiDir)}&#34;
+            errMsg = f&#34;source directory does not exist: {ux(teiRefDir)}&#34;
             teiVersion = &#34;&#34;
             teiVersionRep = &#34;&#34;
         else:
-            teiVersions = sorted(dirContents(teiDir)[1], key=versionSort)
+            teiVersions = sorted(dirContents(teiRefDir)[1], key=versionSort)
             nTeiVersions = len(teiVersions)
 
             if tei in {&#34;latest&#34;, &#34;0&#34;, 0} or str(tei).lstrip(&#34;-&#34;).isdecimal():
@@ -6893,10 +6916,10 @@ and the current directory is not used to determine them.</dd>
                         (
                             (
                                 f&#34;no item in {absIndex} in {nTeiVersions} source versions &#34;
-                                f&#34;in {ux(teiDir)}&#34;
+                                f&#34;in {ux(teiRefDir)}&#34;
                             )
                             if len(teiVersions)
-                            else f&#34;no source versions in {ux(teiDir)}&#34;
+                            else f&#34;no source versions in {ux(teiRefDir)}&#34;
                         ),
                         error=True,
                     )
@@ -6905,10 +6928,10 @@ and the current directory is not used to determine them.</dd>
             else:
                 teiVersion = tei
 
-            errMsg = f&#34;source version {teiVersion} does not exist in {ux(teiDir)}&#34;
+            errMsg = f&#34;source version {teiVersion} does not exist in {ux(teiRefDir)}&#34;
             teiVersionRep = f&#34;/{teiVersion}&#34;
 
-        teiPath = f&#34;{teiDir}{teiVersionRep}&#34;
+        teiPath = f&#34;{teiRefDir}{teiVersionRep}&#34;
         reportPath = f&#34;{reportDir}{teiVersionRep}&#34;
 
         if not dirExists(teiPath):
@@ -11107,7 +11130,7 @@ that code between automatic generation of files.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L5140-L5512" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L5149-L5521" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def appTask(self, tokenBased=False):
     &#34;&#34;&#34;Implementation of the &#34;app&#34; task.
@@ -11500,7 +11523,7 @@ There should be a valid TF dataset and app configuration in place</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L5516-L5552" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L5525-L5561" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def browseTask(self):
     &#34;&#34;&#34;Implementation of the &#34;browse&#34; task.
@@ -11585,7 +11608,7 @@ at your own risk.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L2028-L3089" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L2037-L3098" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def checkTask(self, carryon=False):
     &#34;&#34;&#34;Implementation of the &#34;check&#34; task.
@@ -12665,7 +12688,7 @@ at your own risk.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L5005-L5089" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L5014-L5098" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def convertTask(self):
     &#34;&#34;&#34;Implementation of the &#34;convert&#34; task.
@@ -12767,7 +12790,7 @@ at your own risk.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L3093-L3106" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L3102-L3115" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getConverter(self):
     &#34;&#34;&#34;Initializes a converter.
@@ -12808,7 +12831,7 @@ that has access to this data.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L3110-L5003" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L3119-L5012" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getDirector(self):
     &#34;&#34;&#34;Factory for the director function.
@@ -14720,7 +14743,7 @@ that has access to this data.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L1872-L1894" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L1881-L1903" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getParser(self):
     &#34;&#34;&#34;Configure the LXML parser.
@@ -14755,7 +14778,7 @@ that has access to this data.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L1829-L1870" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L1838-L1879" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getSwitches(self, xmlPath):
     verbose = self.verbose
@@ -14824,7 +14847,7 @@ that contains the file names in that folder, sorted.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L1929-L2026" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L1938-L2035" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def getXML(self):
     &#34;&#34;&#34;Make an inventory of the TEI source files.
@@ -14946,7 +14969,7 @@ the results of which will be cached in the invisible <code>.tf</code> directory 
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L5091-L5136" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L5100-L5145" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def loadTask(self):
     &#34;&#34;&#34;Implementation of the &#34;load&#34; task.
@@ -15022,7 +15045,7 @@ If the parsing failed, a message is written to stderr.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L1896-L1927" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L1905-L1936" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def parseXML(self, fileName, fileOrText, parser):
     &#34;&#34;&#34;Parse an XML source.
@@ -15066,7 +15089,7 @@ If the parsing failed, a message is written to stderr.</dd>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L1760-L1827" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L1769-L1836" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def readSchemas(self):
     schemaDir = self.schemaDir
@@ -15178,7 +15201,7 @@ will not be executed.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
-<a href="https://github.com/annotation/text-fabric-factory/blob/a566b81552e55871f7f91c401da7bf599863174e/tff/convert/tei.py#L5554-L5631" class="git-link">Browse git</a>
+<a href="https://github.com/annotation/text-fabric-factory/blob/aaebe4aaee0da1aac36110999a1c9c762576e958/tff/convert/tei.py#L5563-L5640" class="git-link">Browse git</a>
 </summary>
 <pre><code class="python">def task(
     self,
